@@ -606,9 +606,14 @@ function depotIcon(label, color) {
 // ── Share ─────────────────────────────────────────────────────────────────────
 
 function shareText() {
-  const text = document.getElementById("whatsapp-text").textContent;
-  if (!text.trim()) { showToast("Optimize a route first"); return; }
-  window.location.href = `sms:?body=${encodeURIComponent(text)}`;
+  const primaryLink = document.getElementById("maps-btn-primary").getAttribute("href");
+  if (!primaryLink || primaryLink === "#") { showToast("Optimize a route first"); return; }
+  const extraLinks = Array.from(document.querySelectorAll("#maps-extra-links a")).map(a => a.getAttribute("href"));
+  const allLinks = [primaryLink, ...extraLinks];
+  const body = allLinks.length === 1
+    ? `Today's optimized route:\n${allLinks[0]}`
+    : allLinks.map((l, i) => `Part ${i + 1}: ${l}`).join("\n");
+  window.location.href = `sms:?body=${encodeURIComponent(body)}`;
 }
 
 function copyWhatsapp() {
