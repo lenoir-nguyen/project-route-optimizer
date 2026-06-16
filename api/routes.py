@@ -122,27 +122,24 @@ async def optimize_route(body: OptimizeRequest):
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _maps_url(waypoints: list[str]) -> str:
-    encoded = "/".join(urllib.parse.quote(w, safe=",") for w in waypoints)
+    # safe="" so commas/spaces in addresses are percent-encoded; Maps decodes them fine
+    encoded = "/".join(urllib.parse.quote(w, safe="") for w in waypoints)
     return f"https://www.google.com/maps/dir/{encoded}"
 
 
-def _stop_to_coord(stop: Stop) -> str:
-    return f"{stop.lat},{stop.lng}"
-
-
 def _build_maps_links(depot: Stop, stops: list[Stop], end_depot: Stop) -> list[str]:
-    """Split into chunks of ≤23 stops per Maps URL; each link chains from the previous."""
-    start_coord = _stop_to_coord(depot)
-    end_coord = _stop_to_coord(end_depot)
+    """Split into chunks of ≤23 stops per Maps URL using formatted addresses.
+    Addresses are more reliably parsed by the Maps mobile app than raw lat/lng coordinates.
+    """
     links: list[str] = []
     chunk_size = _MAPS_WAYPOINT_LIMIT - 2  # leave room for origin + destination
 
     for i in range(0, len(stops), chunk_size):
         chunk = stops[i : i + chunk_size]
-        origin = start_coord if i == 0 else _stop_to_coord(stops[i - 1])
+        origin = depot.formatted_address if i == 0 else stops[i - 1].formatted_address
         is_last_chunk = i + chunk_size >= len(stops)
-        destination = end_coord if is_last_chunk else _stop_to_coord(stops[i + chunk_size])
-        waypoints = [origin] + [_stop_to_coord(s) for s in chunk] + [destination]
+        destination = end_depot.formatted_address if is_last_chunk else stops[i + chunk_size].formatted_address
+        waypoints = [origin] + [s.formatted_address for s in chunk] + [destination]
         links.append(_maps_url(waypoints))
 
     return links
