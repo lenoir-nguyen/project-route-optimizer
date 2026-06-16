@@ -197,7 +197,13 @@ a.btn-action { line-height: 1.2; }
 .result-address { font-size: .875rem; line-height: 1.4; }
 .result-type { font-size: .72rem; color: var(--gray-400); }
 
-#whatsapp-text { font-size: .8rem; line-height: 1.6; min-height: 100px; color: var(--gray-800); }
+#whatsapp-text {
+  font-family: inherit; font-size: .85rem; line-height: 1.75;
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--gray-50); border: 1px solid var(--gray-200);
+  border-radius: var(--radius); padding: 12px 14px;
+  color: var(--gray-800); margin: 0;
+}
 
 /* Autocomplete dropdown */
 .autocomplete-wrapper { position: relative; flex: 1; }

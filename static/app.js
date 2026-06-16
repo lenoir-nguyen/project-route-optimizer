@@ -1,6 +1,8 @@
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const DUPLICATE_THRESHOLD_M = 50; // metres — same lat/lng within this = same location
+const DEFAULT_START = "1388 Kennedy Road, Scarborough, ON, Canada";
+const DEFAULT_END   = "333 Inverness Dr, Oshawa, ON L1J 5T6";
 
 let stops = []; // [{id, orderId, originalAddress, formattedAddress, lat, lng, type, status}]
 let startDepot = JSON.parse(localStorage.getItem("startDepot") || "null");
@@ -9,21 +11,44 @@ let _routeMap  = null; // Leaflet map instance
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
+  setupAutocomplete("start-input", "start-dropdown", onStartSelect);
+  setupAutocomplete("end-input",   "end-dropdown",   onEndSelect);
+  setupAutocomplete("single-input", "single-dropdown", onSingleSelect);
+  setupDragDrop();
+
   if (startDepot) {
     document.getElementById("start-input").value = startDepot.formattedAddress;
     setStatus("start-status", `✅ ${startDepot.formattedAddress}`, "green");
+  } else {
+    setStatus("start-status", "Setting default start…", "gray");
+    const r = await geocodeAddress(DEFAULT_START);
+    if (r.lat) {
+      startDepot = { formattedAddress: r.formatted_address, lat: r.lat, lng: r.lng };
+      localStorage.setItem("startDepot", JSON.stringify(startDepot));
+      document.getElementById("start-input").value = startDepot.formattedAddress;
+      setStatus("start-status", `✅ ${startDepot.formattedAddress}`, "green");
+    }
   }
+
   if (endDepot) {
     document.getElementById("same-as-start").checked = false;
     document.getElementById("end-section").style.display = "block";
     document.getElementById("end-input").value = endDepot.formattedAddress;
     setStatus("end-status", `✅ ${endDepot.formattedAddress}`, "green");
+  } else {
+    document.getElementById("same-as-start").checked = false;
+    document.getElementById("end-section").style.display = "block";
+    setStatus("end-status", "Setting default end…", "gray");
+    const r = await geocodeAddress(DEFAULT_END);
+    if (r.lat) {
+      endDepot = { formattedAddress: r.formatted_address, lat: r.lat, lng: r.lng };
+      localStorage.setItem("endDepot", JSON.stringify(endDepot));
+      document.getElementById("end-input").value = endDepot.formattedAddress;
+      setStatus("end-status", `✅ ${endDepot.formattedAddress}`, "green");
+    }
   }
-  setupAutocomplete("start-input", "start-dropdown", onStartSelect);
-  setupAutocomplete("end-input",   "end-dropdown",   onEndSelect);
-  setupAutocomplete("single-input", "single-dropdown", onSingleSelect);
-  setupDragDrop();
+
   updateUI();
 });
 
@@ -502,7 +527,7 @@ function renderResults({ ordered_stops, maps_links, whatsapp_text }) {
       </div>
     </div>`).join("");
 
-  document.getElementById("whatsapp-text").value = whatsapp_text;
+  document.getElementById("whatsapp-text").textContent = whatsapp_text;
 
   resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -581,13 +606,13 @@ function depotIcon(label, color) {
 // ── Share ─────────────────────────────────────────────────────────────────────
 
 function shareWhatsapp() {
-  const text = document.getElementById("whatsapp-text").value;
-  if (!text) { showToast("Optimize a route first"); return; }
-  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  const text = document.getElementById("whatsapp-text").textContent;
+  if (!text.trim()) { showToast("Optimize a route first"); return; }
+  window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
 }
 
 function copyWhatsapp() {
-  const text = document.getElementById("whatsapp-text").value;
+  const text = document.getElementById("whatsapp-text").textContent;
   navigator.clipboard.writeText(text).then(() => showToast("Copied to clipboard!"));
 }
 

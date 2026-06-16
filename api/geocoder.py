@@ -22,10 +22,26 @@ _BUSINESS_TYPES = {
 }
 
 
-def _classify_type(place_types: list[str]) -> Literal["residential", "business", "unknown"]:
+_RESIDENTIAL_TYPES = {
+    "street_address",
+    "premise",
+    "subpremise",
+    "residential",
+}
+
+_PRECISE_LOCATION_TYPES = {"ROOFTOP", "RANGE_INTERPOLATED"}
+
+
+def _classify_type(place_types: list[str], location_type: str) -> Literal["residential", "business", "unknown"]:
+    # Business wins if any business type is present
     if any(t in _BUSINESS_TYPES for t in place_types):
         return "business"
-    if "street_address" in place_types or "premise" in place_types:
+    # Explicit residential type in result
+    if any(t in _RESIDENTIAL_TYPES for t in place_types):
+        return "residential"
+    # ROOFTOP/RANGE_INTERPOLATED means Google matched to a specific building/address —
+    # treat as residential when no business types were found
+    if location_type in _PRECISE_LOCATION_TYPES:
         return "residential"
     return "unknown"
 
@@ -55,12 +71,12 @@ async def geocode(address: str) -> dict:
     place_types = result.get("types", [])
 
     # ROOFTOP = exact match; RANGE_INTERPOLATED = estimated; others = less precise
-    status = "ok" if location_type in ("ROOFTOP", "RANGE_INTERPOLATED") else "uncertain"
+    status = "ok" if location_type in _PRECISE_LOCATION_TYPES else "uncertain"
 
     return {
         "formatted_address": result["formatted_address"],
         "lat": location["lat"],
         "lng": location["lng"],
-        "type": _classify_type(place_types),
+        "type": _classify_type(place_types, location_type),
         "status": status,
     }
