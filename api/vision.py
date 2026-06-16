@@ -6,10 +6,12 @@ import anthropic
 
 client = anthropic.Anthropic()
 
-_PROMPT = """Look at this image and extract every delivery address you can see.
-Return ONLY a JSON array, no other text. Each item: {"address": "<full address>", "confident": true/false}.
-Set confident=false if you are unsure whether a string is a real address or the address text is unclear.
-Do not include names, phone numbers, order IDs, prices, or any non-address text."""
+_PROMPT = """Look at this image and extract every delivery order you can see.
+Return ONLY a JSON array, no other text. Each item:
+{"address": "<full delivery address>", "order_id": "<order or task ID if visible, otherwise null>", "confident": true/false}.
+Set confident=false if the address text is unclear or you are unsure it is a real delivery address.
+Set order_id to null if no order/task ID is visible next to this entry.
+Do not include customer names, phone numbers, or prices in the address field."""
 
 
 def extract_addresses_from_image(image_data: bytes, media_type: str) -> list[dict]:

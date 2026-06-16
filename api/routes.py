@@ -24,15 +24,16 @@ class GeocodeRequest(BaseModel):
 
 
 class Stop(BaseModel):
-    address: str
+    address: str = ""
     formatted_address: str
     lat: float
     lng: float
-    type: str  # "residential" | "business" | "unknown"
+    type: str = "unknown"
 
 
 class OptimizeRequest(BaseModel):
     depot: Stop
+    end_depot: Stop | None = None  # None = round trip (end same as start)
     stops: list[Stop]
 
 
@@ -80,23 +81,36 @@ async def geocode_address(body: GeocodeRequest):
 
 @router.post("/optimize")
 async def optimize_route(body: OptimizeRequest):
-    """
-    Accept a depot + list of validated stops → return optimized order + Google Maps URLs.
-    """
+    """Accept a depot + optional end depot + validated stops → optimized order + Maps URLs."""
     if not body.stops:
         raise HTTPException(400, "At least one stop is required.")
-    if len(body.stops) > 58:
-        raise HTTPException(400, "Maximum 58 stops supported.")
+    if len(body.stops) > 57:
+        raise HTTPException(400, "Maximum 57 stops supported.")
 
-    # Build location list: depot first, then stops
-    locations = [(body.depot.lat, body.depot.lng)] + [(s.lat, s.lng) for s in body.stops]
+    end_depot = body.end_depot
+    round_trip = end_depot is None or (
+        abs(end_depot.lat - body.depot.lat) < 1e-6
+        and abs(end_depot.lng - body.depot.lng) < 1e-6
+    )
+
+    if round_trip:
+        locations = [(body.depot.lat, body.depot.lng)] + [(s.lat, s.lng) for s in body.stops]
+        end_idx = 0
+        actual_end = body.depot
+    else:
+        locations = (
+            [(body.depot.lat, body.depot.lng)]
+            + [(s.lat, s.lng) for s in body.stops]
+            + [(end_depot.lat, end_depot.lng)]
+        )
+        end_idx = len(locations) - 1
+        actual_end = end_depot
 
     duration_matrix = await build_duration_matrix(locations)
-    ordered_indices = solve_tsp(duration_matrix)  # indices into `locations` list
+    ordered_indices = solve_tsp(duration_matrix, end_idx=end_idx)
+    ordered_stops = [body.stops[i - 1] for i in ordered_indices]
 
-    ordered_stops = [body.stops[i - 1] for i in ordered_indices]  # -1 because depot is index 0
-
-    maps_links = _build_maps_links(body.depot, ordered_stops)
+    maps_links = _build_maps_links(body.depot, ordered_stops, actual_end)
 
     return {
         "ordered_stops": ordered_stops,
@@ -108,7 +122,6 @@ async def optimize_route(body: OptimizeRequest):
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _maps_url(waypoints: list[str]) -> str:
-    """Build a Google Maps directions URL from a list of address or lat,lng strings."""
     encoded = "/".join(urllib.parse.quote(w, safe=",") for w in waypoints)
     return f"https://www.google.com/maps/dir/{encoded}"
 
@@ -117,28 +130,18 @@ def _stop_to_coord(stop: Stop) -> str:
     return f"{stop.lat},{stop.lng}"
 
 
-def _build_maps_links(depot: Stop, stops: list[Stop]) -> list[str]:
-    """
-    Split into chunks of up to _MAPS_WAYPOINT_LIMIT stops per link.
-    Each link starts where the previous one ended.
-    """
-    depot_coord = _stop_to_coord(depot)
+def _build_maps_links(depot: Stop, stops: list[Stop], end_depot: Stop) -> list[str]:
+    """Split into chunks of ≤23 stops per Maps URL; each link chains from the previous."""
+    start_coord = _stop_to_coord(depot)
+    end_coord = _stop_to_coord(end_depot)
     links: list[str] = []
     chunk_size = _MAPS_WAYPOINT_LIMIT - 2  # leave room for origin + destination
 
     for i in range(0, len(stops), chunk_size):
         chunk = stops[i : i + chunk_size]
-        if i == 0:
-            origin = depot_coord
-        else:
-            origin = _stop_to_coord(stops[i - 1])
-
-        # Last chunk ends at depot; others end at next chunk's first stop
-        if i + chunk_size >= len(stops):
-            destination = depot_coord
-        else:
-            destination = _stop_to_coord(stops[i + chunk_size])
-
+        origin = start_coord if i == 0 else _stop_to_coord(stops[i - 1])
+        is_last_chunk = i + chunk_size >= len(stops)
+        destination = end_coord if is_last_chunk else _stop_to_coord(stops[i + chunk_size])
         waypoints = [origin] + [_stop_to_coord(s) for s in chunk] + [destination]
         links.append(_maps_url(waypoints))
 

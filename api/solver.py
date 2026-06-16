@@ -1,20 +1,16 @@
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
 
-def solve_tsp(duration_matrix: list[list[int]]) -> list[int]:
+def solve_tsp(duration_matrix: list[list[int]], end_idx: int = 0) -> list[int]:
     """
-    Solve the Travelling Salesman Problem for a round trip starting and ending at depot (index 0).
+    Solve TSP. Depot (start) is always index 0.
+    end_idx=0 means round trip (end = start = depot).
+    end_idx=N means open route ending at the last location in the matrix.
 
-    Args:
-        duration_matrix: NxN integer matrix of travel durations in seconds.
-                         Index 0 is always the depot.
-
-    Returns:
-        Ordered list of stop indices (excluding the depot at start/end).
-        e.g. [2, 5, 1, 3, 4] means visit stop 2 first, then 5, etc.
+    Returns ordered node indices of the delivery stops (excludes start and end depots).
     """
     n = len(duration_matrix)
-    manager = pywrapcp.RoutingIndexManager(n, 1, 0)  # n nodes, 1 vehicle, depot=0
+    manager = pywrapcp.RoutingIndexManager(n, 1, [0], [end_idx])
     routing = pywrapcp.RoutingModel(manager)
 
     def duration_callback(from_index: int, to_index: int) -> int:
@@ -30,14 +26,13 @@ def solve_tsp(duration_matrix: list[list[int]]) -> list[int]:
 
     solution = routing.SolveWithParameters(search_params)
     if not solution:
-        # Fallback: return original order if solver fails
-        return list(range(1, n))
+        return [i for i in range(1, n) if i != end_idx]
 
     route: list[int] = []
     index = routing.Start(0)
     while not routing.IsEnd(index):
         node = manager.IndexToNode(index)
-        if node != 0:  # skip depot
+        if node != 0 and node != end_idx:
             route.append(node)
         index = solution.Value(routing.NextVar(index))
     return route

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Route Optimizer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -17,17 +18,41 @@
 
 <main>
 
-  <!-- Depot -->
+  <!-- Route Points (start + end) -->
   <div class="card" id="depot-card">
-    <h2>📍 Your Starting Point (Depot)</h2>
-    <div class="depot-row">
-      <div class="autocomplete-wrapper">
-        <input type="text" id="depot-input" placeholder="Enter your home / warehouse address…" autocomplete="off" />
-        <div class="autocomplete-dropdown" id="depot-dropdown" style="display:none"></div>
+    <h2>📍 Route Points</h2>
+
+    <div class="route-point-section">
+      <div class="field-label">Starting point</div>
+      <div class="depot-row">
+        <div class="autocomplete-wrapper">
+          <input type="text" id="start-input" placeholder="Enter your starting address…" autocomplete="off" />
+          <div class="autocomplete-dropdown" id="start-dropdown" style="display:none"></div>
+        </div>
+        <button class="btn-primary btn-sm" onclick="saveStart()">Save</button>
       </div>
-      <button class="btn-primary btn-sm" onclick="saveDepot()">Save</button>
+      <div class="depot-status" id="start-status"></div>
     </div>
-    <div class="depot-status" id="depot-status"></div>
+
+    <div class="route-point-section" style="margin-top:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div class="field-label" style="margin:0">End point</div>
+        <label class="same-as-toggle">
+          <input type="checkbox" id="same-as-start" checked onchange="toggleEndPoint(this.checked)" />
+          <span>Same as start</span>
+        </label>
+      </div>
+      <div id="end-section" style="display:none">
+        <div class="depot-row">
+          <div class="autocomplete-wrapper">
+            <input type="text" id="end-input" placeholder="Enter your ending address…" autocomplete="off" />
+            <div class="autocomplete-dropdown" id="end-dropdown" style="display:none"></div>
+          </div>
+          <button class="btn-primary btn-sm" onclick="saveEnd()">Save</button>
+        </div>
+        <div class="depot-status" id="end-status"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Input -->
@@ -63,7 +88,7 @@
         <input type="file" id="file-input" accept="image/*" multiple onchange="handleImageUpload(event)" />
         <div class="icon">📷</div>
         <p><strong>Tap to upload</strong> or drag &amp; drop images</p>
-        <p style="margin-top:4px;font-size:.75rem">Screenshots from Tookan, photos of order lists — AI will extract addresses</p>
+        <p style="margin-top:4px;font-size:.75rem">Screenshots from Tookan — AI extracts addresses and skips duplicate order IDs</p>
       </div>
       <div id="upload-status" class="mt-8" style="font-size:.82rem;color:#4b5563"></div>
     </div>
@@ -79,9 +104,9 @@
       </div>
       <div class="stat-box warn" id="stat-dup-box">
         <div class="num" id="stat-duplicates">0</div>
-        <div class="label">Duplicates</div>
+        <div class="label">Same Location</div>
       </div>
-      <div class="stat-box" id="stat-type-box">
+      <div class="stat-box">
         <div class="num" id="stat-business">0</div>
         <div class="label">Business 🏢</div>
       </div>
@@ -102,13 +127,26 @@
   <!-- Results -->
   <div class="card" id="results">
     <h2>✅ Optimized Route</h2>
-    <div class="maps-links" id="maps-links"></div>
-    <div id="result-list"></div>
+
+    <!-- Map -->
+    <div id="route-map"></div>
+
+    <!-- Action buttons -->
+    <div class="action-row">
+      <a id="maps-btn-primary" href="#" target="_blank" class="btn-primary btn-action">🗺️ Open in Google Maps</a>
+      <button class="btn-whatsapp btn-action" onclick="shareWhatsapp()">💬 Share via WhatsApp</button>
+      <button class="btn-secondary btn-action btn-sm" onclick="copyWhatsapp()">📋 Copy text</button>
+    </div>
+
+    <!-- Part 2 link (only when >23 stops) -->
+    <div id="maps-extra-links"></div>
+
+    <!-- Ordered stop list -->
+    <div id="result-list" style="margin-top:12px"></div>
+
+    <!-- Text share area -->
     <div style="margin-top:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:.82rem;color:#4b5563">WhatsApp / text format</span>
-        <button class="btn-secondary btn-sm" onclick="copyWhatsapp()">Copy</button>
-      </div>
+      <div style="font-size:.82rem;color:#4b5563;margin-bottom:6px">Route text for sharing</div>
       <textarea id="whatsapp-text" readonly></textarea>
     </div>
   </div>
@@ -117,6 +155,7 @@
 
 <div id="toast"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

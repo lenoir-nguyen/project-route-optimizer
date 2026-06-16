@@ -1,22 +1,30 @@
 // ── State ─────────────────────────────────────────────────────────────────────
 
-const GOOGLE_MAPS_KEY = null; // set via window.GOOGLE_MAPS_KEY injected by backend if needed
-const DUPLICATE_THRESHOLD_M = 50; // metres
+const DUPLICATE_THRESHOLD_M = 50; // metres — same lat/lng within this = same location
 
-let stops = []; // [{id, originalAddress, formattedAddress, lat, lng, type, status}]
-let depot = JSON.parse(localStorage.getItem("depot") || "null");
-let autocompleteSession = {}; // per-field debounce timers & controllers
+let stops = []; // [{id, orderId, originalAddress, formattedAddress, lat, lng, type, status}]
+let startDepot = JSON.parse(localStorage.getItem("startDepot") || "null");
+let endDepot   = JSON.parse(localStorage.getItem("endDepot")   || "null");
+let _routeMap  = null; // Leaflet map instance
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 window.addEventListener("DOMContentLoaded", () => {
-  if (depot) {
-    document.getElementById("depot-input").value = depot.formattedAddress;
-    setDepotStatus(`✅ ${depot.formattedAddress}`, "green");
+  if (startDepot) {
+    document.getElementById("start-input").value = startDepot.formattedAddress;
+    setStatus("start-status", `✅ ${startDepot.formattedAddress}`, "green");
   }
-  setupAutocomplete("depot-input", "depot-dropdown", onDepotSelect);
+  if (endDepot) {
+    document.getElementById("same-as-start").checked = false;
+    document.getElementById("end-section").style.display = "block";
+    document.getElementById("end-input").value = endDepot.formattedAddress;
+    setStatus("end-status", `✅ ${endDepot.formattedAddress}`, "green");
+  }
+  setupAutocomplete("start-input", "start-dropdown", onStartSelect);
+  setupAutocomplete("end-input",   "end-dropdown",   onEndSelect);
   setupAutocomplete("single-input", "single-dropdown", onSingleSelect);
   setupDragDrop();
+  updateUI();
 });
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -28,42 +36,73 @@ function switchTab(name, btn) {
   document.getElementById(`tab-${name}`).classList.add("active");
 }
 
-// ── Depot ─────────────────────────────────────────────────────────────────────
+// ── Route Points (start / end) ────────────────────────────────────────────────
 
-async function saveDepot() {
-  const raw = document.getElementById("depot-input").value.trim();
+function toggleEndPoint(sameAsStart) {
+  document.getElementById("end-section").style.display = sameAsStart ? "none" : "block";
+  if (sameAsStart) {
+    endDepot = null;
+    localStorage.removeItem("endDepot");
+    updateUI();
+  }
+}
+
+async function saveStart() {
+  const raw = document.getElementById("start-input").value.trim();
   if (!raw) return;
-  setDepotStatus("Geocoding…", "gray");
+  setStatus("start-status", "Geocoding…", "gray");
   const result = await geocodeAddress(raw);
   if (result.status === "not_found") {
-    setDepotStatus("❌ Address not found — try Google autocomplete", "red");
+    setStatus("start-status", "❌ Address not found — try typing and selecting from autocomplete", "red");
     return;
   }
-  depot = { formattedAddress: result.formatted_address, lat: result.lat, lng: result.lng };
-  localStorage.setItem("depot", JSON.stringify(depot));
-  document.getElementById("depot-input").value = depot.formattedAddress;
-  setDepotStatus(`✅ Saved: ${depot.formattedAddress}`, "green");
+  startDepot = { formattedAddress: result.formatted_address, lat: result.lat, lng: result.lng };
+  localStorage.setItem("startDepot", JSON.stringify(startDepot));
+  document.getElementById("start-input").value = startDepot.formattedAddress;
+  setStatus("start-status", `✅ Saved: ${startDepot.formattedAddress}`, "green");
   updateUI();
 }
 
-function onDepotSelect(place) {
-  depot = { formattedAddress: place.description, lat: null, lng: null };
-  // Geocode to get coordinates
+async function saveEnd() {
+  const raw = document.getElementById("end-input").value.trim();
+  if (!raw) return;
+  setStatus("end-status", "Geocoding…", "gray");
+  const result = await geocodeAddress(raw);
+  if (result.status === "not_found") {
+    setStatus("end-status", "❌ Address not found — try typing and selecting from autocomplete", "red");
+    return;
+  }
+  endDepot = { formattedAddress: result.formatted_address, lat: result.lat, lng: result.lng };
+  localStorage.setItem("endDepot", JSON.stringify(endDepot));
+  document.getElementById("end-input").value = endDepot.formattedAddress;
+  setStatus("end-status", `✅ Saved: ${endDepot.formattedAddress}`, "green");
+  updateUI();
+}
+
+function onStartSelect(place) {
   geocodeAddress(place.description).then(result => {
-    if (result.lat) {
-      depot.lat = result.lat;
-      depot.lng = result.lng;
-      depot.formattedAddress = result.formatted_address;
-      localStorage.setItem("depot", JSON.stringify(depot));
-      document.getElementById("depot-input").value = depot.formattedAddress;
-      setDepotStatus(`✅ Saved: ${depot.formattedAddress}`, "green");
-      updateUI();
-    }
+    if (!result.lat) return;
+    startDepot = { formattedAddress: result.formatted_address, lat: result.lat, lng: result.lng };
+    localStorage.setItem("startDepot", JSON.stringify(startDepot));
+    document.getElementById("start-input").value = startDepot.formattedAddress;
+    setStatus("start-status", `✅ Saved: ${startDepot.formattedAddress}`, "green");
+    updateUI();
   });
 }
 
-function setDepotStatus(msg, color) {
-  const el = document.getElementById("depot-status");
+function onEndSelect(place) {
+  geocodeAddress(place.description).then(result => {
+    if (!result.lat) return;
+    endDepot = { formattedAddress: result.formatted_address, lat: result.lat, lng: result.lng };
+    localStorage.setItem("endDepot", JSON.stringify(endDepot));
+    document.getElementById("end-input").value = endDepot.formattedAddress;
+    setStatus("end-status", `✅ Saved: ${endDepot.formattedAddress}`, "green");
+    updateUI();
+  });
+}
+
+function setStatus(elementId, msg, color) {
+  const el = document.getElementById(elementId);
   el.textContent = msg;
   el.style.color = color === "green" ? "var(--green)" : color === "red" ? "var(--red)" : "var(--gray-600)";
 }
@@ -92,13 +131,8 @@ function onSingleSelect(place) {
 async function addSingleAddress() {
   const raw = document.getElementById("single-input").value.trim();
   if (!raw) return;
-  if (_pendingSinglePlace && _pendingSinglePlace.description === raw) {
-    // Use the place prediction directly (already has formatted address)
-    await addStop(raw);
-    _pendingSinglePlace = null;
-  } else {
-    await addStop(raw);
-  }
+  await addStop(raw);
+  _pendingSinglePlace = null;
   document.getElementById("single-input").value = "";
 }
 
@@ -122,13 +156,18 @@ async function handleImageUpload(event) {
       return;
     }
 
-    let added = 0, flagged = 0;
-    for (const { address, confident } of addresses) {
-      await addStop(address, !confident);
+    let added = 0, skipped = 0, flagged = 0;
+    for (const { address, order_id, confident } of addresses) {
+      const result = await addStop(address, !confident, order_id || null);
+      if (result === "skipped") { skipped++; continue; }
       added++;
       if (!confident) flagged++;
     }
-    setUploadStatus(`✅ Added ${added} address(es)${flagged ? ` · ⚠️ ${flagged} need review` : ""}`);
+
+    const parts = [`✅ Added ${added} address(es)`];
+    if (skipped) parts.push(`⏭️ ${skipped} skipped (same order ID)`);
+    if (flagged) parts.push(`⚠️ ${flagged} need review`);
+    setUploadStatus(parts.join(" · "));
   } catch (err) {
     setUploadStatus(`❌ Error: ${err.message}`);
   }
@@ -157,10 +196,22 @@ function setupDragDrop() {
 
 // ── Core stop management ──────────────────────────────────────────────────────
 
-async function addStop(rawAddress, needsReview = false) {
+// Returns "skipped" if a stop with the same orderId already exists, otherwise undefined.
+async function addStop(rawAddress, needsReview = false, orderId = null) {
+  // Same order ID from a different image → skip silently (not a new stop)
+  if (orderId && stops.some(s => s.orderId === orderId)) {
+    return "skipped";
+  }
+
   const id = Date.now() + Math.random();
-  const stop = { id, originalAddress: rawAddress, formattedAddress: rawAddress, lat: null, lng: null, type: "unknown", status: "pending" };
-  if (needsReview) stop.status = "uncertain";
+  const stop = {
+    id, orderId,
+    originalAddress: rawAddress,
+    formattedAddress: rawAddress,
+    lat: null, lng: null,
+    type: "unknown",
+    status: needsReview ? "uncertain" : "pending",
+  };
   stops.push(stop);
   renderStops();
 
@@ -183,6 +234,7 @@ function removeStop(id) {
 function clearAll() {
   stops = [];
   document.getElementById("results").style.display = "none";
+  if (_routeMap) { _routeMap.remove(); _routeMap = null; }
   renderStops();
 }
 
@@ -197,7 +249,6 @@ async function geocodeAddress(address) {
   return res.json();
 }
 
-// Fix an uncertain address using the autocomplete result
 async function fixAddress(id, newAddress) {
   const stop = stops.find(s => s.id === id);
   if (!stop) return;
@@ -221,18 +272,16 @@ function setupAutocomplete(inputId, dropdownId, onSelect) {
   const input = document.getElementById(inputId);
   const dropdown = document.getElementById(dropdownId);
   let debounceTimer = null;
-  let abortController = null;
 
   input.addEventListener("input", () => {
     clearTimeout(debounceTimer);
     const q = input.value.trim();
     if (q.length < 3) { dropdown.style.display = "none"; return; }
-    debounceTimer = setTimeout(() => fetchSuggestions(q, dropdown, onSelect, () => abortController), 300);
+    debounceTimer = setTimeout(() => fetchSuggestions(q, dropdown, onSelect), 300);
   });
 
   input.addEventListener("keydown", e => {
-    if (e.key === "Enter") { dropdown.style.display = "none"; }
-    if (e.key === "Escape") { dropdown.style.display = "none"; }
+    if (e.key === "Enter" || e.key === "Escape") dropdown.style.display = "none";
   });
 
   document.addEventListener("click", e => {
@@ -266,22 +315,6 @@ function renderDropdown(predictions, dropdown, onSelect) {
   dropdown.style.display = "block";
 }
 
-// Inline fix autocomplete for a specific stop
-function setupFixAutocomplete(inputEl, id) {
-  let debounceTimer = null;
-  const dropdown = inputEl.nextElementSibling;
-
-  inputEl.addEventListener("input", () => {
-    clearTimeout(debounceTimer);
-    const q = inputEl.value.trim();
-    if (q.length < 3) { if (dropdown) dropdown.style.display = "none"; return; }
-    debounceTimer = setTimeout(() => fetchSuggestions(q, dropdown, p => {
-      inputEl.value = p.description;
-      if (dropdown) dropdown.style.display = "none";
-    }), 300);
-  });
-}
-
 // ── Render ────────────────────────────────────────────────────────────────────
 
 function renderStops() {
@@ -294,27 +327,27 @@ function renderStops() {
     return;
   }
 
-  const dupes = findDuplicates();
+  const sameLocIds = findSameLocationIds();
 
   container.innerHTML = stops.map(stop => {
-    const isDupe = dupes.has(stop.id);
+    const isSameLoc = sameLocIds.has(stop.id);
     const statusIcon = { ok: "✓", uncertain: "?", not_found: "✗", pending: "…" }[stop.status] || "…";
     const typeLabel = stop.type === "business" ? "🏢 Business" : stop.type === "residential" ? "🏠 Residential" : "";
+    const orderTag = stop.orderId ? `<span class="order-id-tag">#${stop.orderId}</span>` : "";
 
     return `
-    <div class="address-item${isDupe ? ' style="border-color:var(--yellow)"' : ''}" data-id="${stop.id}">
+    <div class="address-item${isSameLoc ? " same-loc" : ""}" data-id="${stop.id}">
       <div class="badge badge-${stop.status}">${statusIcon}</div>
       <div class="address-text">
-        <div>${stop.formattedAddress}${isDupe ? ' <span style="color:var(--yellow);font-size:.72rem">⚠ duplicate</span>' : ""}</div>
+        <div>${stop.formattedAddress}${orderTag}${isSameLoc ? ' <span class="same-loc-label">⚠ same location</span>' : ""}</div>
         ${stop.originalAddress !== stop.formattedAddress ? `<div class="original">Original: ${stop.originalAddress}</div>` : ""}
         ${stop.status === "uncertain" || stop.status === "not_found" ? `
           <div class="fix-row">
             <div class="autocomplete-wrapper" style="position:relative">
               <input type="text" class="fix-input" placeholder="Search correct address…"
-                oninput="debounceFix(this, ${stop.id})"
                 onkeydown="if(event.key==='Enter'){applyFix(this,${stop.id})}"
               />
-              <div class="autocomplete-dropdown fix-dropdown-${stop.id}" style="display:none"></div>
+              <div class="autocomplete-dropdown fix-dd-${stop.id}" style="display:none"></div>
             </div>
             <button class="btn-secondary btn-sm" onclick="applyFix(this.previousElementSibling.querySelector('input'),${stop.id})">Fix</button>
           </div>` : ""}
@@ -324,28 +357,24 @@ function renderStops() {
     </div>`;
   }).join("");
 
-  // Wire up fix-dropdown autocomplete
+  // Wire up fix-row autocomplete after rendering
   document.querySelectorAll(".fix-input").forEach(input => {
-    const id = parseFloat(input.closest(".address-item").dataset.id);
-    const dropdown = input.parentElement.querySelector(`[class*="fix-dropdown"]`);
+    const item = input.closest(".address-item");
+    const id = parseFloat(item.dataset.id);
+    const dd = item.querySelector(`[class*="fix-dd-"]`);
     input.addEventListener("input", () => {
       clearTimeout(input._timer);
       const q = input.value.trim();
-      if (q.length < 3) { dropdown.style.display = "none"; return; }
-      input._timer = setTimeout(() => fetchSuggestions(q, dropdown, p => {
+      if (q.length < 3) { if (dd) dd.style.display = "none"; return; }
+      input._timer = setTimeout(() => fetchSuggestions(q, dd, p => {
         input.value = p.description;
-        dropdown.style.display = "none";
+        if (dd) dd.style.display = "none";
       }), 300);
     });
   });
 }
 
-function debounceFix(input, id) {
-  // handled by inline event wiring above via input event
-}
-
-function applyFix(inputOrEl, id) {
-  const input = inputOrEl.tagName === "INPUT" ? inputOrEl : inputOrEl;
+function applyFix(input, id) {
   const val = input.value.trim();
   if (!val) return;
   fixAddress(id, val);
@@ -353,18 +382,19 @@ function applyFix(inputOrEl, id) {
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 
-function findDuplicates() {
-  const dupeIds = new Set();
+// Returns set of stop IDs where two different stops are within DUPLICATE_THRESHOLD_M of each other
+function findSameLocationIds() {
+  const ids = new Set();
   const confirmed = stops.filter(s => s.lat && s.lng);
   for (let i = 0; i < confirmed.length; i++) {
     for (let j = i + 1; j < confirmed.length; j++) {
       if (distanceM(confirmed[i], confirmed[j]) < DUPLICATE_THRESHOLD_M) {
-        dupeIds.add(confirmed[i].id);
-        dupeIds.add(confirmed[j].id);
+        ids.add(confirmed[i].id);
+        ids.add(confirmed[j].id);
       }
     }
   }
-  return dupeIds;
+  return ids;
 }
 
 function distanceM(a, b) {
@@ -376,28 +406,24 @@ function distanceM(a, b) {
 }
 
 function updateSummary() {
-  const total = stops.length;
-  const dupes = findDuplicates().size / 2 | 0; // pairs
-  const business = stops.filter(s => s.type === "business").length;
-
-  document.getElementById("stat-total").textContent = total;
-  document.getElementById("stat-duplicates").textContent = dupes;
-  document.getElementById("stat-business").textContent = business;
-  document.getElementById("stop-count").textContent = total ? `(${total})` : "";
+  const sameLocPairs = findSameLocationIds().size / 2 | 0;
+  document.getElementById("stat-total").textContent = stops.length;
+  document.getElementById("stat-duplicates").textContent = sameLocPairs;
+  document.getElementById("stat-business").textContent = stops.filter(s => s.type === "business").length;
+  document.getElementById("stop-count").textContent = stops.length ? `(${stops.length})` : "";
 }
 
 function updateUI() {
-  const ready = stops.length > 0 && depot && stops.every(s => s.status === "ok" || s.status === "uncertain");
-  const allGood = stops.length > 0 && depot && stops.every(s => s.status === "ok");
+  const ready = stops.length > 0 && startDepot && stops.every(s => s.status === "ok" || s.status === "uncertain");
   const btn = document.getElementById("optimize-btn");
   btn.disabled = !ready;
-  btn.title = !depot ? "Save your depot first" : !ready ? "Fix flagged addresses first" : "";
+  btn.title = !startDepot ? "Save your starting point first" : !ready ? "Fix flagged addresses first" : "";
 }
 
 // ── Optimize ──────────────────────────────────────────────────────────────────
 
 async function optimize() {
-  if (!depot) { showToast("Set your depot first"); return; }
+  if (!startDepot) { showToast("Set your starting point first"); return; }
   const confirmed = stops.filter(s => s.lat && s.lng);
   if (!confirmed.length) { showToast("No geocoded stops to optimize"); return; }
 
@@ -406,10 +432,21 @@ async function optimize() {
   btn.disabled = true;
 
   try {
+    const payload = {
+      depot: toStopPayload(startDepot),
+      end_depot: endDepot ? toStopPayload(endDepot) : null,
+      stops: confirmed.map(s => ({
+        formatted_address: s.formattedAddress,
+        lat: s.lat,
+        lng: s.lng,
+        type: s.type,
+      })),
+    };
+
     const res = await fetch("/api/optimize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ depot, stops: confirmed }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
@@ -422,16 +459,39 @@ async function optimize() {
   }
 }
 
+function toStopPayload(depot) {
+  return {
+    formatted_address: depot.formattedAddress,
+    lat: depot.lat,
+    lng: depot.lng,
+    type: "unknown",
+  };
+}
+
+// ── Results ───────────────────────────────────────────────────────────────────
+
 function renderResults({ ordered_stops, maps_links, whatsapp_text }) {
   const resultsEl = document.getElementById("results");
   resultsEl.style.display = "block";
-  resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  const linksEl = document.getElementById("maps-links");
-  linksEl.innerHTML = maps_links.map((url, i) =>
-    `<a href="${url}" target="_blank">🗺️ Open in Google Maps${maps_links.length > 1 ? ` (Part ${i + 1})` : ""}</a>`
-  ).join("");
+  // Map
+  renderMap(ordered_stops);
 
+  // Primary Google Maps button (first link)
+  const mapsBtn = document.getElementById("maps-btn-primary");
+  mapsBtn.href = maps_links[0];
+
+  // Extra part links (only when route splits into multiple)
+  const extraEl = document.getElementById("maps-extra-links");
+  if (maps_links.length > 1) {
+    extraEl.innerHTML = maps_links.slice(1).map((url, i) =>
+      `<a href="${url}" target="_blank" class="maps-part-link">🗺️ Open Part ${i + 2} in Google Maps</a>`
+    ).join("");
+  } else {
+    extraEl.innerHTML = "";
+  }
+
+  // Ordered stop list
   const listEl = document.getElementById("result-list");
   listEl.innerHTML = ordered_stops.map((stop, i) => `
     <div class="result-item">
@@ -443,9 +503,88 @@ function renderResults({ ordered_stops, maps_links, whatsapp_text }) {
     </div>`).join("");
 
   document.getElementById("whatsapp-text").value = whatsapp_text;
+
+  resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-// ── WhatsApp copy ─────────────────────────────────────────────────────────────
+// ── Leaflet Map ───────────────────────────────────────────────────────────────
+
+function renderMap(orderedStops) {
+  const mapEl = document.getElementById("route-map");
+
+  if (_routeMap) {
+    _routeMap.remove();
+    _routeMap = null;
+  }
+
+  _routeMap = L.map(mapEl);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(_routeMap);
+
+  const latlngs = [];
+
+  // Start marker
+  const startLL = [startDepot.lat, startDepot.lng];
+  latlngs.push(startLL);
+  L.marker(startLL, { icon: depotIcon("S", "#16a34a") })
+    .addTo(_routeMap)
+    .bindPopup(`<b>🟢 Start</b><br>${startDepot.formattedAddress}`);
+
+  // Numbered stop markers
+  orderedStops.forEach((stop, i) => {
+    const ll = [stop.lat, stop.lng];
+    latlngs.push(ll);
+    L.marker(ll, { icon: numIcon(i + 1) })
+      .addTo(_routeMap)
+      .bindPopup(`<b>${i + 1}.</b> ${stop.formatted_address}`);
+  });
+
+  // End marker
+  const actualEnd = endDepot || startDepot;
+  const endLL = [actualEnd.lat, actualEnd.lng];
+  latlngs.push(endLL);
+  const isSameStartEnd = !endDepot || (endDepot.lat === startDepot.lat && endDepot.lng === startDepot.lng);
+  if (!isSameStartEnd) {
+    L.marker(endLL, { icon: depotIcon("E", "#dc2626") })
+      .addTo(_routeMap)
+      .bindPopup(`<b>🔴 End</b><br>${actualEnd.formattedAddress}`);
+  }
+
+  // Route polyline
+  L.polyline(latlngs, { color: "#2563eb", weight: 3, opacity: 0.8, dashArray: "8 5" }).addTo(_routeMap);
+
+  _routeMap.fitBounds(L.latLngBounds(latlngs), { padding: [24, 24] });
+}
+
+function numIcon(n) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="map-num-marker">${n}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14],
+  });
+}
+
+function depotIcon(label, color) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="map-depot-marker" style="background:${color}">${label}</div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15],
+  });
+}
+
+// ── Share ─────────────────────────────────────────────────────────────────────
+
+function shareWhatsapp() {
+  const text = document.getElementById("whatsapp-text").value;
+  if (!text) { showToast("Optimize a route first"); return; }
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+}
 
 function copyWhatsapp() {
   const text = document.getElementById("whatsapp-text").value;
