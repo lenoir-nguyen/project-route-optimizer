@@ -605,10 +605,10 @@ function depotIcon(label, color) {
 
 // ── Share ─────────────────────────────────────────────────────────────────────
 
-function shareWhatsapp() {
+function shareText() {
   const text = document.getElementById("whatsapp-text").textContent;
   if (!text.trim()) { showToast("Optimize a route first"); return; }
-  window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+  window.location.href = `sms:?body=${encodeURIComponent(text)}`;
 }
 
 function copyWhatsapp() {

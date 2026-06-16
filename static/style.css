@@ -74,6 +74,8 @@ button {
 .btn-sm { padding: 5px 10px; font-size: .78rem; }
 .btn-whatsapp { background: var(--whatsapp); color: #fff; }
 .btn-whatsapp:hover { background: var(--whatsapp-dark); }
+.btn-sms { background: var(--green); color: #fff; }
+.btn-sms:hover { background: #15803d; }
 
 /* Action row in results */
 .action-row {
