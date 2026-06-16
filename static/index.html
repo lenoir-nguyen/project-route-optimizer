@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Route Optimizer</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🗺️ Route Optimizer</h1>
+    <div class="subtitle">Optimize your delivery route in one click</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Depot -->
+  <div class="card" id="depot-card">
+    <h2>📍 Your Starting Point (Depot)</h2>
+    <div class="depot-row">
+      <div class="autocomplete-wrapper">
+        <input type="text" id="depot-input" placeholder="Enter your home / warehouse address…" autocomplete="off" />
+        <div class="autocomplete-dropdown" id="depot-dropdown" style="display:none"></div>
+      </div>
+      <button class="btn-primary btn-sm" onclick="saveDepot()">Save</button>
+    </div>
+    <div class="depot-status" id="depot-status"></div>
+  </div>
+
+  <!-- Input -->
+  <div class="card">
+    <h2>Add Delivery Stops</h2>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('paste', this)">📋 Paste</button>
+      <button class="tab-btn" onclick="switchTab('single', this)">✏️ One by one</button>
+      <button class="tab-btn" onclick="switchTab('image', this)">📷 From image</button>
+    </div>
+
+    <!-- Paste tab -->
+    <div class="tab-panel active" id="tab-paste">
+      <textarea id="paste-input" placeholder="Paste addresses here, one per line:&#10;123 Main St, District 1&#10;45 Le Loi, District 3&#10;…"></textarea>
+      <button class="btn-primary mt-8" onclick="processPaste()">Add All Addresses</button>
+    </div>
+
+    <!-- Single autocomplete tab -->
+    <div class="tab-panel" id="tab-single">
+      <div class="input-row">
+        <div class="autocomplete-wrapper">
+          <input type="text" id="single-input" placeholder="Start typing an address…" autocomplete="off" />
+          <div class="autocomplete-dropdown" id="single-dropdown" style="display:none"></div>
+        </div>
+        <button class="btn-primary" id="single-add-btn" onclick="addSingleAddress()">Add</button>
+      </div>
+    </div>
+
+    <!-- Image tab -->
+    <div class="tab-panel" id="tab-image">
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept="image/*" multiple onchange="handleImageUpload(event)" />
+        <div class="icon">📷</div>
+        <p><strong>Tap to upload</strong> or drag &amp; drop images</p>
+        <p style="margin-top:4px;font-size:.75rem">Screenshots from Tookan, photos of order lists — AI will extract addresses</p>
+      </div>
+      <div id="upload-status" class="mt-8" style="font-size:.82rem;color:#4b5563"></div>
+    </div>
+  </div>
+
+  <!-- Summary + address list -->
+  <div class="card" id="list-card">
+    <h2>Stops <span id="stop-count" style="color:#9ca3af;font-weight:400"></span></h2>
+    <div class="summary-grid">
+      <div class="stat-box">
+        <div class="num" id="stat-total">0</div>
+        <div class="label">Total Stops</div>
+      </div>
+      <div class="stat-box warn" id="stat-dup-box">
+        <div class="num" id="stat-duplicates">0</div>
+        <div class="label">Duplicates</div>
+      </div>
+      <div class="stat-box" id="stat-type-box">
+        <div class="num" id="stat-business">0</div>
+        <div class="label">Business 🏢</div>
+      </div>
+    </div>
+
+    <div id="address-list">
+      <div class="empty-state">No stops added yet.</div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn-primary" id="optimize-btn" onclick="optimize()" disabled>
+        ⚡ Optimize Route
+      </button>
+      <button class="btn-secondary btn-sm" onclick="clearAll()">Clear All</button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="card" id="results">
+    <h2>✅ Optimized Route</h2>
+    <div class="maps-links" id="maps-links"></div>
+    <div id="result-list"></div>
+    <div style="margin-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:.82rem;color:#4b5563">WhatsApp / text format</span>
+        <button class="btn-secondary btn-sm" onclick="copyWhatsapp()">Copy</button>
+      </div>
+      <textarea id="whatsapp-text" readonly></textarea>
+    </div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
