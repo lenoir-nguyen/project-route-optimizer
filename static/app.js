@@ -646,19 +646,38 @@ function copyWhatsapp() {
 // ── Zone Earnings ─────────────────────────────────────────────────────────────
 
 let _settingsOpen = false;
-let _editingEarnings = {};
+let _cityEdits = {}; // city entries being edited in the settings panel (excludes toronto + _default)
 
 function extractZoneKey(formattedAddress) {
-  // Match Canadian postal code (A1A 1A1 or A1A1A1); capture first 2 chars (e.g. "M4")
+  // Canadian postal code A1A 1A1 → capture first 2 chars (e.g. "M4" from "M4L 2T3")
   const m = (formattedAddress || "").match(/\b([A-Z]\d)[A-Z]\s?\d[A-Z]\d\b/i);
   return m ? m[1].toUpperCase() : null;
 }
 
+function extractCity(formattedAddress) {
+  // Canadian formatted address: "123 Main St, City, ON A1B 2C3, Canada"
+  const m = (formattedAddress || "").match(/,\s*([^,]+?),\s*ON\b/i);
+  return m ? m[1].trim().toLowerCase() : null;
+}
+
 function getEarning(formattedAddress) {
-  const key = extractZoneKey(formattedAddress);
-  if (key && key in zoneEarnings) return zoneEarnings[key];
-  if ("_default" in zoneEarnings) return zoneEarnings["_default"];
-  return null;
+  const city = extractCity(formattedAddress);
+  let earning = null;
+
+  if (city === "toronto" && zoneEarnings.toronto) {
+    const zoneKey = extractZoneKey(formattedAddress);
+    if (zoneKey && zoneKey in zoneEarnings.toronto) {
+      earning = zoneEarnings.toronto[zoneKey];
+    }
+  } else if (city && city in zoneEarnings) {
+    earning = zoneEarnings[city];
+  }
+
+  // null means not configured for that zone → fall back to default
+  if (earning === null || earning === undefined) {
+    earning = (zoneEarnings._default != null) ? zoneEarnings._default : null;
+  }
+  return earning;
 }
 
 function toggleSettings() {
@@ -666,72 +685,92 @@ function toggleSettings() {
   document.getElementById("settings-body").style.display = _settingsOpen ? "block" : "none";
   document.getElementById("settings-toggle-btn").textContent = _settingsOpen ? "▲" : "▼";
   if (_settingsOpen) {
-    _editingEarnings = { ...zoneEarnings };
-    const defaultInput = document.getElementById("default-earning-input");
-    defaultInput.value = "_default" in _editingEarnings ? _editingEarnings["_default"] : "";
-    renderZoneSettings();
+    // Build editable city list (everything except reserved keys)
+    _cityEdits = {};
+    for (const [k, v] of Object.entries(zoneEarnings)) {
+      if (k !== "_default" && k !== "toronto") _cityEdits[k] = v;
+    }
+    document.getElementById("default-earning-input").value =
+      (zoneEarnings._default != null) ? zoneEarnings._default : "";
+    renderTorontoTable();
+    renderCityTable();
   }
 }
 
-function renderZoneSettings() {
-  const tbody = document.getElementById("zone-tbody");
-  // Exclude _default — it's handled by the dedicated input above the table
-  const entries = Object.entries(_editingEarnings)
-    .filter(([k]) => k !== "_default")
-    .sort(([a], [b]) => a.localeCompare(b));
-  if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="zone-empty">No zones configured yet</td></tr>';
-    return;
-  }
-  tbody.innerHTML = entries.map(([zone, amount]) => `
+function renderTorontoTable() {
+  const tbody = document.getElementById("toronto-zone-tbody");
+  const zones = ["M1", "M2", "M3", "M4", "M5"];
+  const data  = (zoneEarnings.toronto) || {};
+  tbody.innerHTML = zones.map(zone => `
     <tr>
       <td><strong>${zone}</strong></td>
-      <td>$${amount}</td>
-      <td><button class="btn-secondary btn-sm" onclick="removeZoneEntry('${zone}')">Remove</button></td>
-    </tr>
-  `).join("");
+      <td><input type="number" class="zone-short-input" data-toronto-zone="${zone}"
+          value="${data[zone] != null ? data[zone] : ''}" min="0" step="0.5" placeholder="not set" /></td>
+    </tr>`).join("");
 }
 
-function addZoneEntry() {
-  const zoneInput  = document.getElementById("new-zone-input");
-  const amountInput = document.getElementById("new-amount-input");
-  const zone   = zoneInput.value.trim().toUpperCase();
+function renderCityTable() {
+  const tbody = document.getElementById("city-tbody");
+  const entries = Object.entries(_cityEdits).sort(([a], [b]) => a.localeCompare(b));
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="zone-empty">No cities configured</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([city, amount]) => {
+    const label = city.split(" ").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
+    return `
+    <tr>
+      <td>${label}</td>
+      <td><input type="number" class="zone-short-input" data-city="${city}"
+          value="${amount != null ? amount : ''}" min="0" step="0.5" placeholder="not set" /></td>
+      <td><button class="btn-secondary btn-sm" onclick="removeCityEntry('${city}')">Remove</button></td>
+    </tr>`;
+  }).join("");
+}
+
+function addCityEntry() {
+  const cityInput   = document.getElementById("new-city-input");
+  const amountInput = document.getElementById("new-city-amount-input");
+  const city   = cityInput.value.trim().toLowerCase();
   const amount = parseFloat(amountInput.value);
-  if (zone.length !== 2 || !/^[A-Z]\d$/.test(zone)) {
-    showToast("Zone must be 2 characters like M4");
-    return;
-  }
-  if (isNaN(amount) || amount < 0) {
-    showToast("Enter a valid earning amount");
-    return;
-  }
-  _editingEarnings[zone] = amount;
-  zoneInput.value  = "";
+  if (!city) { showToast("Enter a city name"); return; }
+  if (city === "toronto" || city === "_default") { showToast("'toronto' is configured in its own section above"); return; }
+  if (city in _cityEdits) { showToast("City already in the list"); return; }
+  _cityEdits[city]  = isNaN(amount) ? null : amount;
+  cityInput.value   = "";
   amountInput.value = "";
-  renderZoneSettings();
+  renderCityTable();
 }
 
-function removeZoneEntry(zone) {
-  delete _editingEarnings[zone];
-  renderZoneSettings();
+function removeCityEntry(city) {
+  delete _cityEdits[city];
+  renderCityTable();
 }
 
 async function saveZoneSettings() {
-  // Merge the default value (if set) into the payload
+  const payload = { _default: null, toronto: {} };
+
   const defaultVal = parseFloat(document.getElementById("default-earning-input").value);
-  if (!isNaN(defaultVal) && defaultVal >= 0) {
-    _editingEarnings["_default"] = defaultVal;
-  } else {
-    delete _editingEarnings["_default"];
-  }
+  payload._default = isNaN(defaultVal) ? null : defaultVal;
+
+  document.querySelectorAll("[data-toronto-zone]").forEach(input => {
+    const val = parseFloat(input.value);
+    payload.toronto[input.dataset.torontoZone] = isNaN(val) ? null : val;
+  });
+
+  document.querySelectorAll("[data-city]").forEach(input => {
+    const val = parseFloat(input.value);
+    payload[input.dataset.city] = isNaN(val) ? null : val;
+  });
+
   try {
     const res = await fetch("/api/zone-earnings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(_editingEarnings),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(await res.text());
-    zoneEarnings = { ..._editingEarnings };
+    zoneEarnings = payload;
     renderStops();
     showToast("Zone settings saved!");
   } catch (err) {
