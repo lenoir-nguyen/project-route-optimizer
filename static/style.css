@@ -143,11 +143,13 @@ a.btn-action { line-height: 1.2; }
 .fix-row input { flex: 1; font-size: .8rem; padding: 6px 8px; }
 
 /* Summary panel */
-.summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
 .stat-box { background: var(--gray-50); border-radius: var(--radius); padding: 10px; text-align: center; }
 .stat-box .num { font-size: 1.5rem; font-weight: 700; color: var(--blue); }
 .stat-box .label { font-size: .72rem; color: var(--gray-600); margin-top: 2px; }
 .stat-box.warn .num { color: var(--yellow); }
+.stat-box.earn { background: #fef3c7; }
+.stat-box.earn .num { color: #92400e; }
 
 /* Route points (start/end depot) */
 .route-point-section {}
@@ -253,6 +255,7 @@ a.btn-action { line-height: 1.2; }
   margin-top: 16px; margin-bottom: 6px;
   padding-bottom: 4px; border-bottom: 1px solid var(--gray-200);
 }
+.city-name-input { width: 100% !important; min-width: 90px; font-size: .85rem; }
 
 /* Earning badge (stop list + result list) */
 .earning-badge {
@@ -273,6 +276,7 @@ a.btn-action { line-height: 1.2; }
 
 @media (max-width: 480px) {
   main { padding: 10px; gap: 12px; }
+  .summary-grid { grid-template-columns: repeat(2, 1fr); }
   .action-row { flex-direction: column; }
   .btn-action { min-width: unset; }
   #route-map { height: 260px; }

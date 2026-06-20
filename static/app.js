@@ -444,10 +444,18 @@ function distanceM(a, b) {
 
 function updateSummary() {
   const sameLocPairs = findSameLocationIds().size / 2 | 0;
-  document.getElementById("stat-total").textContent = stops.length;
+  const totalEarning = stops
+    .filter(s => s.lat && s.lng)
+    .reduce((sum, s) => {
+      const e = getEarning(s.formattedAddress);
+      return e !== null ? sum + e : sum;
+    }, 0);
+
+  document.getElementById("stat-total").textContent    = stops.length;
   document.getElementById("stat-duplicates").textContent = sameLocPairs;
-  document.getElementById("stat-business").textContent = stops.filter(s => s.type === "business").length;
-  document.getElementById("stop-count").textContent = stops.length ? `(${stops.length})` : "";
+  document.getElementById("stat-business").textContent  = stops.filter(s => s.type === "business").length;
+  document.getElementById("stat-earning").textContent   = `$${totalEarning}`;
+  document.getElementById("stop-count").textContent     = stops.length ? `(${stops.length})` : "";
 }
 
 function updateUI() {
@@ -646,7 +654,6 @@ function copyWhatsapp() {
 // ── Zone Earnings ─────────────────────────────────────────────────────────────
 
 let _settingsOpen = false;
-let _cityEdits = {}; // city entries being edited in the settings panel (excludes toronto + _default)
 
 function extractZoneKey(formattedAddress) {
   // Canadian postal code A1A 1A1 → capture first 2 chars (e.g. "M4" from "M4L 2T3")
@@ -673,7 +680,7 @@ function getEarning(formattedAddress) {
     earning = zoneEarnings[city];
   }
 
-  // null means not configured for that zone → fall back to default
+  // null means not configured for this zone → fall back to default
   if (earning === null || earning === undefined) {
     earning = (zoneEarnings._default != null) ? zoneEarnings._default : null;
   }
@@ -685,11 +692,6 @@ function toggleSettings() {
   document.getElementById("settings-body").style.display = _settingsOpen ? "block" : "none";
   document.getElementById("settings-toggle-btn").textContent = _settingsOpen ? "▲" : "▼";
   if (_settingsOpen) {
-    // Build editable city list (everything except reserved keys)
-    _cityEdits = {};
-    for (const [k, v] of Object.entries(zoneEarnings)) {
-      if (k !== "_default" && k !== "toronto") _cityEdits[k] = v;
-    }
     document.getElementById("default-earning-input").value =
       (zoneEarnings._default != null) ? zoneEarnings._default : "";
     renderTorontoTable();
@@ -697,54 +699,114 @@ function toggleSettings() {
   }
 }
 
+function _torontoRowHtml(zone, amount) {
+  return `
+    <td><input type="text" class="zone-short-input toronto-zone-input" value="${zone}"
+        placeholder="M4" maxlength="3" style="text-transform:uppercase" /></td>
+    <td><input type="number" class="zone-short-input toronto-amount-input"
+        value="${amount != null ? amount : ''}" min="0" step="0.5" placeholder="not set" /></td>
+    <td><button class="btn-secondary btn-sm remove-toronto-btn">Remove</button></td>`;
+}
+
 function renderTorontoTable() {
+  const tbody   = document.getElementById("toronto-zone-tbody");
+  const entries = Object.entries(zoneEarnings.toronto || {}).sort(([a], [b]) => a.localeCompare(b));
+
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="zone-empty">No Toronto zones — add one below</td></tr>';
+  } else {
+    tbody.innerHTML = entries.map(([zone, amount]) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = _torontoRowHtml(zone, amount);
+      return tr.outerHTML;
+    }).join("");
+  }
+
+  tbody.onclick = e => {
+    const btn = e.target.closest(".remove-toronto-btn");
+    if (!btn) return;
+    btn.closest("tr").remove();
+    if (!tbody.querySelector("tr")) {
+      tbody.innerHTML = '<tr><td colspan="3" class="zone-empty">No Toronto zones — add one below</td></tr>';
+    }
+  };
+}
+
+function addTorontoZone() {
+  const zoneInput   = document.getElementById("new-toronto-zone-input");
+  const amountInput = document.getElementById("new-toronto-amount-input");
+  const zone   = zoneInput.value.trim().toUpperCase();
+  const amount = parseFloat(amountInput.value);
+  if (!zone) { showToast("Enter a postal prefix (e.g. M6)"); return; }
+
   const tbody = document.getElementById("toronto-zone-tbody");
-  const zones = ["M1", "M2", "M3", "M4", "M5"];
-  const data  = (zoneEarnings.toronto) || {};
-  tbody.innerHTML = zones.map(zone => `
-    <tr>
-      <td><strong>${zone}</strong></td>
-      <td><input type="number" class="zone-short-input" data-toronto-zone="${zone}"
-          value="${data[zone] != null ? data[zone] : ''}" min="0" step="0.5" placeholder="not set" /></td>
-    </tr>`).join("");
+  const empty = tbody.querySelector(".zone-empty");
+  if (empty) empty.closest("tr").remove();
+
+  const tr = document.createElement("tr");
+  tr.innerHTML = _torontoRowHtml(zone, isNaN(amount) ? null : amount);
+  tbody.appendChild(tr);
+
+  zoneInput.value   = "";
+  amountInput.value = "";
+}
+
+function _cityRowHtml(cityName, amount) {
+  const label = cityName.split(" ").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
+  return `
+    <td><input type="text" class="city-name-input" value="${label}" placeholder="City name" /></td>
+    <td><input type="number" class="zone-short-input city-amount-input"
+        value="${amount != null ? amount : ''}" min="0" step="0.5" placeholder="not set" /></td>
+    <td><button class="btn-secondary btn-sm remove-city-btn">Remove</button></td>`;
 }
 
 function renderCityTable() {
   const tbody = document.getElementById("city-tbody");
-  const entries = Object.entries(_cityEdits).sort(([a], [b]) => a.localeCompare(b));
+  const entries = Object.entries(zoneEarnings)
+    .filter(([k]) => k !== "_default" && k !== "toronto")
+    .sort(([a], [b]) => a.localeCompare(b));
+
   if (!entries.length) {
     tbody.innerHTML = '<tr><td colspan="3" class="zone-empty">No cities configured</td></tr>';
-    return;
+  } else {
+    tbody.innerHTML = entries.map(([city, amount]) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = _cityRowHtml(city, amount);
+      return tr.outerHTML;
+    }).join("");
   }
-  tbody.innerHTML = entries.map(([city, amount]) => {
-    const label = city.split(" ").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
-    return `
-    <tr>
-      <td>${label}</td>
-      <td><input type="number" class="zone-short-input" data-city="${city}"
-          value="${amount != null ? amount : ''}" min="0" step="0.5" placeholder="not set" /></td>
-      <td><button class="btn-secondary btn-sm" onclick="removeCityEntry('${city}')">Remove</button></td>
-    </tr>`;
-  }).join("");
+
+  // Wire up remove buttons (event delegation avoids inline onclick with escaping issues)
+  tbody.onclick = e => {
+    const btn = e.target.closest(".remove-city-btn");
+    if (!btn) return;
+    const row = btn.closest("tr");
+    row.remove();
+    if (!tbody.querySelector("tr")) {
+      tbody.innerHTML = '<tr><td colspan="3" class="zone-empty">No cities configured</td></tr>';
+    }
+  };
 }
 
 function addCityEntry() {
   const cityInput   = document.getElementById("new-city-input");
   const amountInput = document.getElementById("new-city-amount-input");
-  const city   = cityInput.value.trim().toLowerCase();
+  const city   = cityInput.value.trim();
   const amount = parseFloat(amountInput.value);
   if (!city) { showToast("Enter a city name"); return; }
-  if (city === "toronto" || city === "_default") { showToast("'toronto' is configured in its own section above"); return; }
-  if (city in _cityEdits) { showToast("City already in the list"); return; }
-  _cityEdits[city]  = isNaN(amount) ? null : amount;
+  if (city.toLowerCase() === "toronto") { showToast("Toronto is configured in its own section above"); return; }
+
+  const tbody = document.getElementById("city-tbody");
+  // Remove empty-state row if present
+  const empty = tbody.querySelector(".zone-empty");
+  if (empty) empty.closest("tr").remove();
+
+  const tr = document.createElement("tr");
+  tr.innerHTML = _cityRowHtml(city, isNaN(amount) ? null : amount);
+  tbody.appendChild(tr);
+
   cityInput.value   = "";
   amountInput.value = "";
-  renderCityTable();
-}
-
-function removeCityEntry(city) {
-  delete _cityEdits[city];
-  renderCityTable();
 }
 
 async function saveZoneSettings() {
@@ -753,14 +815,31 @@ async function saveZoneSettings() {
   const defaultVal = parseFloat(document.getElementById("default-earning-input").value);
   payload._default = isNaN(defaultVal) ? null : defaultVal;
 
-  document.querySelectorAll("[data-toronto-zone]").forEach(input => {
-    const val = parseFloat(input.value);
-    payload.toronto[input.dataset.torontoZone] = isNaN(val) ? null : val;
+  const seenZones = new Set();
+  document.querySelectorAll("#toronto-zone-tbody tr").forEach(row => {
+    const zoneEl   = row.querySelector(".toronto-zone-input");
+    const amountEl = row.querySelector(".toronto-amount-input");
+    if (!zoneEl) return;
+    const zone = zoneEl.value.trim().toUpperCase();
+    const val  = parseFloat(amountEl?.value);
+    if (zone && !seenZones.has(zone)) {
+      seenZones.add(zone);
+      payload.toronto[zone] = isNaN(val) ? null : val;
+    }
   });
 
-  document.querySelectorAll("[data-city]").forEach(input => {
-    const val = parseFloat(input.value);
-    payload[input.dataset.city] = isNaN(val) ? null : val;
+  // Read city name + earning directly from DOM rows (name is editable)
+  const seen = new Set();
+  document.querySelectorAll("#city-tbody tr").forEach(row => {
+    const nameEl   = row.querySelector(".city-name-input");
+    const amountEl = row.querySelector(".city-amount-input");
+    if (!nameEl) return; // empty-state row
+    const city = nameEl.value.trim().toLowerCase();
+    const val  = parseFloat(amountEl?.value);
+    if (city && city !== "toronto" && city !== "_default" && !seen.has(city)) {
+      seen.add(city);
+      payload[city] = isNaN(val) ? null : val;
+    }
   });
 
   try {

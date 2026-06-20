@@ -69,9 +69,14 @@
 
       <div class="settings-section-label">Toronto — by postal code prefix</div>
       <table class="zone-table">
-        <thead><tr><th>Prefix</th><th>Earning ($)</th></tr></thead>
+        <thead><tr><th>Prefix</th><th>Earning ($)</th><th></th></tr></thead>
         <tbody id="toronto-zone-tbody"></tbody>
       </table>
+      <div class="zone-add-row" style="margin-top:8px">
+        <input type="text" id="new-toronto-zone-input" placeholder="M6" maxlength="3" class="zone-short-input" style="text-transform:uppercase" />
+        <input type="number" id="new-toronto-amount-input" placeholder="Amount" min="0" step="0.5" class="zone-short-input" />
+        <button class="btn-secondary btn-sm" onclick="addTorontoZone()">+ Add Zone</button>
+      </div>
 
       <div class="settings-section-label">Other cities</div>
       <table class="zone-table">
@@ -142,6 +147,10 @@
       <div class="stat-box">
         <div class="num" id="stat-business">0</div>
         <div class="label">Business 🏢</div>
+      </div>
+      <div class="stat-box earn">
+        <div class="num" id="stat-earning">$0</div>
+        <div class="label">Est. Earning 💰</div>
       </div>
     </div>
 
