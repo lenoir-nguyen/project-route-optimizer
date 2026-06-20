@@ -55,6 +55,32 @@
     </div>
   </div>
 
+  <!-- Settings: Zone Earnings -->
+  <div class="card" id="settings-card">
+    <div class="settings-header" onclick="toggleSettings()">
+      <h2 style="margin:0">⚙️ Zone Earnings</h2>
+      <span id="settings-toggle-btn" class="settings-toggle-icon">▼</span>
+    </div>
+    <div id="settings-body" style="display:none;margin-top:14px">
+      <p style="font-size:.8rem;color:var(--gray-600);margin-bottom:12px">
+        Map the first 2 characters of a Canadian postal code (e.g. <strong>M4</strong> from M4L&nbsp;2T3) to an earning amount.
+        Settings are saved in your browser.
+      </p>
+      <table class="zone-table">
+        <thead><tr><th>Zone prefix</th><th>Earning ($)</th><th></th></tr></thead>
+        <tbody id="zone-tbody">
+          <tr><td colspan="3" class="zone-empty">No zones configured yet</td></tr>
+        </tbody>
+      </table>
+      <div class="zone-add-row">
+        <input type="text" id="new-zone-input" placeholder="M4" maxlength="2" class="zone-short-input" />
+        <input type="number" id="new-amount-input" placeholder="12" min="0" step="0.5" class="zone-short-input" />
+        <button class="btn-secondary btn-sm" onclick="addZoneEntry()">+ Add</button>
+      </div>
+      <button class="btn-primary" style="margin-top:10px;width:100%" onclick="saveZoneSettings()">💾 Save Settings</button>
+    </div>
+  </div>
+
   <!-- Input -->
   <div class="card">
     <h2>Add Delivery Stops</h2>

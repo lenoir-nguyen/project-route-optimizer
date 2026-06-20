@@ -5,9 +5,10 @@ const DEFAULT_START = "1388 Kennedy Road, Scarborough, ON, Canada";
 const DEFAULT_END   = "333 Inverness Dr, Oshawa, ON L1J 5T6";
 
 let stops = []; // [{id, orderId, originalAddress, formattedAddress, lat, lng, type, status}]
-let startDepot = JSON.parse(localStorage.getItem("startDepot") || "null");
-let endDepot   = JSON.parse(localStorage.getItem("endDepot")   || "null");
-let _routeMap  = null; // Leaflet map instance
+let startDepot   = JSON.parse(localStorage.getItem("startDepot")    || "null");
+let endDepot     = JSON.parse(localStorage.getItem("endDepot")      || "null");
+let zoneEarnings = JSON.parse(localStorage.getItem("zoneEarnings")  || "{}");
+let _routeMap    = null; // Leaflet map instance
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -358,7 +359,9 @@ function renderStops() {
     const isSameLoc = sameLocIds.has(stop.id);
     const statusIcon = { ok: "✓", uncertain: "?", not_found: "✗", pending: "…" }[stop.status] || "…";
     const typeLabel = stop.type === "business" ? "🏢 Business" : stop.type === "residential" ? "🏠 Residential" : "";
-    const orderTag = stop.orderId ? `<span class="order-id-tag">#${stop.orderId}</span>` : "";
+    const orderTag  = stop.orderId ? `<span class="order-id-tag">#${stop.orderId}</span>` : "";
+    const earning   = getEarning(stop.formattedAddress);
+    const earningBadge = earning !== null ? `<span class="earning-badge">💰 $${earning}</span>` : "";
 
     return `
     <div class="address-item${isSameLoc ? " same-loc" : ""}" data-id="${stop.id}">
@@ -377,7 +380,10 @@ function renderStops() {
             <button class="btn-secondary btn-sm" onclick="applyFix(this.previousElementSibling.querySelector('input'),${stop.id})">Fix</button>
           </div>` : ""}
       </div>
-      ${typeLabel ? `<span class="address-type-badge">${typeLabel}</span>` : ""}
+      <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
+        ${typeLabel ? `<span class="address-type-badge">${typeLabel}</span>` : ""}
+        ${earningBadge}
+      </div>
       <button class="remove-btn" onclick="removeStop(${stop.id})" title="Remove">×</button>
     </div>`;
   }).join("");
@@ -518,14 +524,24 @@ function renderResults({ ordered_stops, maps_links, whatsapp_text }) {
 
   // Ordered stop list
   const listEl = document.getElementById("result-list");
-  listEl.innerHTML = ordered_stops.map((stop, i) => `
+  let totalEarning = 0;
+  listEl.innerHTML = ordered_stops.map((stop, i) => {
+    const earning = getEarning(stop.formatted_address);
+    if (earning !== null) totalEarning += earning;
+    const earningBadge = earning !== null ? `<span class="earning-badge">💰 $${earning}</span>` : "";
+    return `
     <div class="result-item">
       <div class="result-num">${i + 1}</div>
-      <div>
+      <div style="flex:1">
         <div class="result-address">${stop.formatted_address}</div>
         <div class="result-type">${stop.type === "business" ? "🏢 Business" : stop.type === "residential" ? "🏠 Residential" : ""}</div>
       </div>
-    </div>`).join("");
+      ${earningBadge}
+    </div>`;
+  }).join("");
+  if (totalEarning > 0) {
+    listEl.innerHTML += `<div class="total-earning">💰 Total estimated earning: $${totalEarning}</div>`;
+  }
 
   document.getElementById("whatsapp-text").textContent = whatsapp_text;
 
@@ -619,6 +635,80 @@ function shareText() {
 function copyWhatsapp() {
   const text = document.getElementById("whatsapp-text").textContent;
   navigator.clipboard.writeText(text).then(() => showToast("Copied to clipboard!"));
+}
+
+// ── Zone Earnings ─────────────────────────────────────────────────────────────
+
+let _settingsOpen = false;
+let _editingEarnings = {};
+
+function extractZoneKey(formattedAddress) {
+  // Match Canadian postal code (A1A 1A1 or A1A1A1); capture first 2 chars (e.g. "M4")
+  const m = (formattedAddress || "").match(/\b([A-Z]\d)[A-Z]\s?\d[A-Z]\d\b/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+function getEarning(formattedAddress) {
+  const key = extractZoneKey(formattedAddress);
+  if (!key || !(key in zoneEarnings)) return null;
+  return zoneEarnings[key];
+}
+
+function toggleSettings() {
+  _settingsOpen = !_settingsOpen;
+  document.getElementById("settings-body").style.display = _settingsOpen ? "block" : "none";
+  document.getElementById("settings-toggle-btn").textContent = _settingsOpen ? "▲" : "▼";
+  if (_settingsOpen) {
+    _editingEarnings = { ...zoneEarnings };
+    renderZoneSettings();
+  }
+}
+
+function renderZoneSettings() {
+  const tbody = document.getElementById("zone-tbody");
+  const entries = Object.entries(_editingEarnings).sort(([a], [b]) => a.localeCompare(b));
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="zone-empty">No zones configured yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([zone, amount]) => `
+    <tr>
+      <td><strong>${zone}</strong></td>
+      <td>$${amount}</td>
+      <td><button class="btn-secondary btn-sm" onclick="removeZoneEntry('${zone}')">Remove</button></td>
+    </tr>
+  `).join("");
+}
+
+function addZoneEntry() {
+  const zoneInput  = document.getElementById("new-zone-input");
+  const amountInput = document.getElementById("new-amount-input");
+  const zone   = zoneInput.value.trim().toUpperCase();
+  const amount = parseFloat(amountInput.value);
+  if (zone.length !== 2 || !/^[A-Z]\d$/.test(zone)) {
+    showToast("Zone must be 2 characters like M4");
+    return;
+  }
+  if (isNaN(amount) || amount < 0) {
+    showToast("Enter a valid earning amount");
+    return;
+  }
+  _editingEarnings[zone] = amount;
+  zoneInput.value  = "";
+  amountInput.value = "";
+  renderZoneSettings();
+}
+
+function removeZoneEntry(zone) {
+  delete _editingEarnings[zone];
+  renderZoneSettings();
+}
+
+function saveZoneSettings() {
+  zoneEarnings = { ..._editingEarnings };
+  localStorage.setItem("zoneEarnings", JSON.stringify(zoneEarnings));
+  renderStops();
+  showToast("Zone settings saved!");
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
