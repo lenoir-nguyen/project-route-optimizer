@@ -5,9 +5,9 @@ const DEFAULT_START = "1388 Kennedy Road, Scarborough, ON, Canada";
 const DEFAULT_END   = "333 Inverness Dr, Oshawa, ON L1J 5T6";
 
 let stops = []; // [{id, orderId, originalAddress, formattedAddress, lat, lng, type, status}]
-let startDepot   = JSON.parse(localStorage.getItem("startDepot")    || "null");
-let endDepot     = JSON.parse(localStorage.getItem("endDepot")      || "null");
-let zoneEarnings = JSON.parse(localStorage.getItem("zoneEarnings")  || "{}");
+let startDepot   = JSON.parse(localStorage.getItem("startDepot") || "null");
+let endDepot     = JSON.parse(localStorage.getItem("endDepot")   || "null");
+let zoneEarnings = {}; // loaded from server on startup
 let _routeMap    = null; // Leaflet map instance
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -17,6 +17,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   setupAutocomplete("end-input",   "end-dropdown",   onEndSelect);
   setupAutocomplete("single-input", "single-dropdown", onSingleSelect);
   setupDragDrop();
+
+  // Load zone earnings from server (persists in data/zone_earnings.json)
+  try {
+    const res = await fetch("/api/zone-earnings");
+    if (res.ok) zoneEarnings = await res.json();
+  } catch (_) {}
 
   if (startDepot) {
     document.getElementById("start-input").value = startDepot.formattedAddress;
@@ -650,8 +656,9 @@ function extractZoneKey(formattedAddress) {
 
 function getEarning(formattedAddress) {
   const key = extractZoneKey(formattedAddress);
-  if (!key || !(key in zoneEarnings)) return null;
-  return zoneEarnings[key];
+  if (key && key in zoneEarnings) return zoneEarnings[key];
+  if ("_default" in zoneEarnings) return zoneEarnings["_default"];
+  return null;
 }
 
 function toggleSettings() {
@@ -660,13 +667,18 @@ function toggleSettings() {
   document.getElementById("settings-toggle-btn").textContent = _settingsOpen ? "▲" : "▼";
   if (_settingsOpen) {
     _editingEarnings = { ...zoneEarnings };
+    const defaultInput = document.getElementById("default-earning-input");
+    defaultInput.value = "_default" in _editingEarnings ? _editingEarnings["_default"] : "";
     renderZoneSettings();
   }
 }
 
 function renderZoneSettings() {
   const tbody = document.getElementById("zone-tbody");
-  const entries = Object.entries(_editingEarnings).sort(([a], [b]) => a.localeCompare(b));
+  // Exclude _default — it's handled by the dedicated input above the table
+  const entries = Object.entries(_editingEarnings)
+    .filter(([k]) => k !== "_default")
+    .sort(([a], [b]) => a.localeCompare(b));
   if (!entries.length) {
     tbody.innerHTML = '<tr><td colspan="3" class="zone-empty">No zones configured yet</td></tr>';
     return;
@@ -704,11 +716,27 @@ function removeZoneEntry(zone) {
   renderZoneSettings();
 }
 
-function saveZoneSettings() {
-  zoneEarnings = { ..._editingEarnings };
-  localStorage.setItem("zoneEarnings", JSON.stringify(zoneEarnings));
-  renderStops();
-  showToast("Zone settings saved!");
+async function saveZoneSettings() {
+  // Merge the default value (if set) into the payload
+  const defaultVal = parseFloat(document.getElementById("default-earning-input").value);
+  if (!isNaN(defaultVal) && defaultVal >= 0) {
+    _editingEarnings["_default"] = defaultVal;
+  } else {
+    delete _editingEarnings["_default"];
+  }
+  try {
+    const res = await fetch("/api/zone-earnings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(_editingEarnings),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    zoneEarnings = { ..._editingEarnings };
+    renderStops();
+    showToast("Zone settings saved!");
+  } catch (err) {
+    showToast(`Error saving: ${err.message}`);
+  }
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────

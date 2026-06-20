@@ -246,6 +246,7 @@ a.btn-action { line-height: 1.2; }
 .zone-empty { text-align: center; color: var(--gray-400); padding: 14px; }
 .zone-add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .zone-short-input { width: 80px !important; }
+.default-earning-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 /* Earning badge (stop list + result list) */
 .earning-badge {

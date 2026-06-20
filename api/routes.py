@@ -1,10 +1,14 @@
+import json
 import os
 import urllib.parse
+from pathlib import Path
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
+
+_EARNINGS_FILE = Path(__file__).parent.parent / "data" / "zone_earnings.json"
 
 from api.geocoder import geocode
 from api.matrix import build_duration_matrix
@@ -143,6 +147,28 @@ def _build_maps_links(depot: Stop, stops: list[Stop], end_depot: Stop) -> list[s
         links.append(_maps_url(waypoints))
 
     return links
+
+
+@router.get("/zone-earnings")
+async def get_zone_earnings():
+    """Return the zone earnings mapping from the server-side JSON file."""
+    if not _EARNINGS_FILE.exists():
+        return {}
+    try:
+        return json.loads(_EARNINGS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+@router.post("/zone-earnings")
+async def save_zone_earnings(request: Request):
+    """Save the zone earnings mapping to the server-side JSON file."""
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Expected a JSON object")
+    _EARNINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _EARNINGS_FILE.write_text(json.dumps(body, indent=2, sort_keys=True), encoding="utf-8")
+    return {"ok": True}
 
 
 def _build_whatsapp_text(stops: list[Stop]) -> str:
