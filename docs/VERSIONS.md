@@ -1,13 +1,37 @@
-# Versions — <Project Name>
+# Versions — Route Optimizer
 
 Release notes, newest first.
 
-## v1 — <YYYY-MM-DD> (in progress)
+## v1 — 2026-06-21 (in progress)
 
-**Goal:** <what this version delivers>
+**Goal:** A working hosted web app that turns a list of delivery addresses into an optimized,
+shareable driving route, with per-stop earning estimates.
 
-- <change>
-- <change>
+Delivered so far:
+
+- **Address input** — three methods feeding one unified list: paste (one per line),
+  Google Places autocomplete (typeahead), and image upload (Claude Haiku Vision extracts
+  addresses from screenshots, dedupes by order ID).
+- **Geocoding & validation** — Google Geocoding for lat/lng + precision status; uncertain /
+  not-found stops are flagged with an inline "fix" autocomplete.
+- **Business vs residential** — Google Places **Nearby Search** (radius 10m) at the geocoded
+  point; replaced the earlier `findplacefromtext` approach, which misclassified bare addresses.
+- **Route points** — configurable start and end depot (default round trip = end is start),
+  persisted in `localStorage`.
+- **Optimization** — ORS driving-duration matrix → OR-Tools TSP (10s timeout, ≤57 stops) →
+  ordered stop list, Leaflet route map, and chunked Google Maps URLs (≤23 waypoints each).
+- **Sharing** — SMS deep link for the route link(s) + copy-to-clipboard route text.
+  (WhatsApp share was tried then dropped.)
+- **Summary panel** — total stops, same-location pairs (within 50m), business count, and a
+  live total estimated earning.
+- **Zone earnings** — server-side `data/zone_earnings.json` (global config) read/written via
+  `/api/zone-earnings`; matched client-side by city, with Toronto split by postal-code prefix,
+  and a configurable default for unmatched zones. Fully dynamic settings UI.
+
+Known gaps:
+
+- `data/zone_earnings.json` ships with placeholder `null` amounts — real values not yet entered.
+- No automated tests yet.
 
 ---
 

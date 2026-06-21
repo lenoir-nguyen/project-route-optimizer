@@ -1,41 +1,59 @@
-# Setup Guide — <Project Name>
+# Setup Guide — Route Optimizer
 
 ## Prerequisites
 
-- <e.g. Python 3.11+, Node 20+, Docker>
+- Python 3.11+
+- API keys for: Anthropic (Claude), Google Maps Platform (Geocoding + Places enabled),
+  OpenRouteService (free account)
 
 ## 1. Clone & configure
 
 ```bash
 git clone <repo-url>
-cd <project>
+cd project-route-optimizer
 cp .env.example .env   # fill in real values
 ```
 
-## 2. Backend
+Required env vars (see `.env.example`):
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_MAPS_API_KEY=AIza...      # enable Geocoding API + Places API
+ORS_API_KEY=...
+```
+
+## 2. Install & run
+
+There is **no separate frontend build** — the SPA in `static/` is served directly by FastAPI.
 
 ```bash
-cd backend
 python -m venv .venv
 # Windows: .venv\Scripts\activate   |   macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-<run command, e.g. uvicorn main:app --reload --port 8000>
+uvicorn main:app --reload          # serves on http://localhost:8000
 ```
 
-## 3. Frontend
+## 3. Verify
 
-```bash
-cd frontend
-npm install
-npm run dev   # http://localhost:3000
-```
+- Open http://localhost:8000 — the app loads and auto-sets the default start/end depots.
+- Paste an address or two → confirm they geocode (green check) and show business/residential.
+- Click **Optimize Route** → an ordered list, Leaflet map, and Google Maps link appear.
+- Open **⚙️ Zone Earnings** → add a city/amount, Save, confirm the earning badge updates.
 
-## 4. Verify
+## Deployment (Railway)
 
-- <How to confirm it works end-to-end: hit a route, load the page, run a smoke test.>
+FastAPI + static files deploy as one service. Set the same env vars in the Railway project.
+
+> **Note:** `data/zone_earnings.json` is written at runtime by `/api/zone-earnings`. On Railway
+> the filesystem is ephemeral — attach a persistent volume (or move this config to a store) if
+> zone settings must survive redeploys.
 
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| <symptom> | <cause> | <fix> |
+| `KeyError: 'GOOGLE_MAPS_API_KEY'` on a request | `.env` missing or not loaded | Ensure `.env` exists; `main.py` calls `load_dotenv()` at startup |
+| Autocomplete / geocode returns nothing | Places or Geocoding API not enabled, or key restricted | Enable both APIs in Google Cloud; check key restrictions |
+| Optimize fails with a 4xx from ORS | Too many stops or bad ORS key | Keep ≤57 stops; verify `ORS_API_KEY` |
+| Address flagged "uncertain" | Geocoder returned a non-rooftop match | Use the inline fix box to pick a precise address |
+| Zone settings reset after deploy | Ephemeral filesystem on host | Attach a persistent volume for `data/` |
