@@ -13,15 +13,17 @@
 
 A hosted web app that takes a list of delivery addresses (pasted, typed, or extracted from
 photos), validates them, and calculates the optimal driving route between a configurable
-start and end point (round trip by default). Output is one or more Google Maps links plus
-shareable route text. Each stop can also show an estimated earning based on its zone.
+start and end point (round trip by default). Output is one or more Google Maps links plus a
+shareable WhatsApp link that reopens the whole working session. Each stop can also show an
+estimated earning based on its zone.
 
 User flow:
 1. Open web app → set start/end points → paste addresses, add via autocomplete, or upload screenshots
 2. App geocodes each address, classifies business/residential, and flags uncertain/unfound ones
 3. User reviews summary (total stops, same-location pairs, business count, est. earning) and fixes flagged stops
 4. Click Optimize → ORS matrix → OR-Tools solves TSP → ordered stop list + route map appears
-5. Open in Google Maps on phone, or share the route link via SMS / copy the text
+5. Open in Google Maps on phone, or share a **WhatsApp link that reopens the whole session**
+   (stops, depots, and the optimized route) so someone else can continue and open GPS themselves
 
 ---
 
@@ -58,7 +60,7 @@ prefix), using the config served by `/api/zone-earnings`.
 | Address typing | Google Places API | Autocomplete + Nearby Search (business vs residential) |
 | Distance matrix | OpenRouteService API | Free tier; ≤3481 elements/request (59×59) |
 | Route solver | Google OR-Tools | TSP, 10s timeout, runs server-side |
-| Sharing | SMS link + clipboard | `sms:?body=` deep link; WhatsApp was dropped |
+| Sharing | WhatsApp + clipboard | Share = `wa.me/?text=` link with the full session encoded in the URL `#fragment` (LZ-string) |
 | Hosting | Railway | FastAPI + static files |
 
 ---

@@ -43,6 +43,12 @@ server-side persisted state is a single global zone-earnings config file.
    Share:  Google Maps link(s), SMS deep link, copy route text
 ```
 
+**Session sharing** is stateless too: the Share button serializes the whole working session
+(stops + start/end depots, plus the optimized route if it's still current) into the URL
+`#fragment`, compressed with LZ-string, and hands it to WhatsApp (`wa.me/?text=`). Opening that
+link rehydrates the app on the recipient's device — no backend storage. A signature of the
+stops+depots tags the stored route so a stale route is never shared.
+
 Earning amounts are **not** computed server-side: `app.js` reads the config from
 `/api/zone-earnings` and matches each stop by city (and Toronto postal-code prefix), falling
 back to `_default`. City matching is canonicalized via `normalizeCity()` (lowercase, strip

@@ -23,8 +23,10 @@ Delivered so far:
   persisted in `localStorage`.
 - **Optimization** — ORS driving-duration matrix → OR-Tools TSP (10s timeout, ≤57 stops) →
   ordered stop list, Leaflet route map, and chunked Google Maps URLs (≤23 waypoints each).
-- **Sharing** — SMS deep link for the route link(s) + copy-to-clipboard route text.
-  (WhatsApp share was tried then dropped.)
+- **Sharing** — Share opens **WhatsApp** with a link that encodes the whole working session
+  (stops + depots, plus the optimized route if current) in the URL `#fragment` (LZ-string).
+  Opening it rehydrates the app so the recipient can keep editing and open GPS themselves.
+  Also: copy-to-clipboard route text and the direct Google Maps link.
 - **Summary panel** — total stops, same-location pairs (within 50m), business count, and a
   live total estimated earning.
 - **Zone earnings** — server-side `data/zone_earnings.json` (global config) read/written via

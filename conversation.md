@@ -105,3 +105,21 @@ child of `.address-item` so it wraps to its own line. `static/style.css` — `fl
 (avoids iOS zoom-on-focus) + larger padding; Save button kept from shrinking. Layout-only;
 autocomplete wiring unaffected (`closest('.address-item')`). Syntax verified.
 **Open / next steps:** User to test on Vercel/phone.
+
+## 2026-06-21 — Share = WhatsApp link that reopens the whole session (incl. route)
+**Discussed:** Change Share from "Google Maps link with ordered points" to a link to the *app*
+that reopens with all current data so the recipient can keep working and open GPS themselves;
+include the pre-optimized route if present; share via WhatsApp (SMS hit length limits).
+**Decisions:** Encode the session (stops + start/end depots, + optimized route if still current)
+into the URL `#fragment`, compressed with LZ-string — stateless, no backend storage, host-
+agnostic. Hand off to WhatsApp (`wa.me/?text=`), which handles long links. Guard against sharing
+a stale route via a stops+depots signature.
+**Changes made:** `static/index.html` — button → "💬 Share on WhatsApp", added lz-string CDN.
+`static/app.js` — `shareSession()` (WhatsApp + clipboard backup), `loadSharedSession()` /
+`applySharedSession()`, init refactored to restore a shared session (and render the route if
+included), `routeSignature()` + `_lastResult`/`_lastResultSig`, `reflect*Depot()` helpers.
+Docs updated (CLAUDE.md, ARCHITECTURE.md, VERSIONS.md). Verified with Node round-trip +
+staleness tests (13/13 across two suites); browser/WhatsApp hand-off to be tested by user.
+**Open / next steps:** Known tradeoff — very large routes make a long link (fine for WhatsApp;
+would need a server short-link only if a tiny URL is required). Results panel still doesn't
+auto-hide when stops change after optimizing (the share correctly omits the stale route, though).

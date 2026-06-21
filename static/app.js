@@ -10,6 +10,8 @@ let endDepot     = JSON.parse(localStorage.getItem("endDepot")   || "null");
 let zoneEarnings = {}; // loaded from server on startup
 let _routeMap    = null; // Leaflet map instance
 let _editingIds  = new Set(); // stop ids currently in inline-edit mode
+let _lastResult  = null; // last optimize result {ordered_stops, maps_links, whatsapp_text}
+let _lastResultSig = null; // signature of stops+depots when _lastResult was computed
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -25,40 +27,111 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (res.ok) zoneEarnings = await res.json();
   } catch (_) {}
 
-  if (startDepot) {
-    document.getElementById("start-input").value = startDepot.formattedAddress;
-    setStatus("start-status", `✅ ${startDepot.formattedAddress}`, "green");
-  } else {
+  // A shared link (#s=…) carries a full working session: stops + start/end depots.
+  // When present it takes over depot/stop setup so the recipient sees the sender's data.
+  const shared = loadSharedSession();
+  if (shared) applySharedSession(shared);
+
+  // Start depot: use whatever we have (saved or shared); otherwise seed the default.
+  if (!startDepot) {
     setStatus("start-status", "Setting default start…", "gray");
     const r = await geocodeAddress(DEFAULT_START);
     if (r.lat) {
       startDepot = { formattedAddress: r.formatted_address, lat: r.lat, lng: r.lng };
       localStorage.setItem("startDepot", JSON.stringify(startDepot));
-      document.getElementById("start-input").value = startDepot.formattedAddress;
-      setStatus("start-status", `✅ ${startDepot.formattedAddress}`, "green");
     }
   }
+  reflectStartDepot();
 
-  if (endDepot) {
-    document.getElementById("same-as-start").checked = false;
-    document.getElementById("end-section").style.display = "block";
-    document.getElementById("end-input").value = endDepot.formattedAddress;
-    setStatus("end-status", `✅ ${endDepot.formattedAddress}`, "green");
-  } else {
-    document.getElementById("same-as-start").checked = false;
-    document.getElementById("end-section").style.display = "block";
+  // End depot: seed the default end only on a normal load — a shared round trip
+  // (no end in the link) should stay "same as start", not get the default.
+  if (!endDepot && !shared) {
     setStatus("end-status", "Setting default end…", "gray");
     const r = await geocodeAddress(DEFAULT_END);
     if (r.lat) {
       endDepot = { formattedAddress: r.formatted_address, lat: r.lat, lng: r.lng };
       localStorage.setItem("endDepot", JSON.stringify(endDepot));
-      document.getElementById("end-input").value = endDepot.formattedAddress;
-      setStatus("end-status", `✅ ${endDepot.formattedAddress}`, "green");
     }
   }
+  reflectEndDepot();
 
+  if (shared) {
+    renderStops();
+    // If the sender had already optimized, show that route so the recipient can
+    // open the GPS immediately (they can still edit + re-optimize).
+    if (shared.result) {
+      try { renderResults(shared.result); } catch (_) {}
+    }
+  }
   updateUI();
 });
+
+// Reflect the current start/end depot objects into the UI inputs + status.
+function reflectStartDepot() {
+  if (!startDepot) return;
+  document.getElementById("start-input").value = startDepot.formattedAddress;
+  setStatus("start-status", `✅ ${startDepot.formattedAddress}`, "green");
+}
+
+function reflectEndDepot() {
+  const sameAsStart = !endDepot;
+  document.getElementById("same-as-start").checked = sameAsStart;
+  document.getElementById("end-section").style.display = sameAsStart ? "none" : "block";
+  if (!sameAsStart) {
+    document.getElementById("end-input").value = endDepot.formattedAddress;
+    setStatus("end-status", `✅ ${endDepot.formattedAddress}`, "green");
+  }
+}
+
+// ── Shareable session (state encoded in the URL) ──────────────────────────────
+
+// Parse a shared session from the URL hash (#s=<compressed>). Returns null if absent/invalid.
+function loadSharedSession() {
+  const m = location.hash.match(/[#&]s=([^&]+)/);
+  if (!m) return null;
+  try {
+    const json = LZString.decompressFromEncodedURIComponent(m[1]);
+    const data = JSON.parse(json);
+    if (!data || !Array.isArray(data.stops)) return null;
+    const depot = d => d ? { formattedAddress: d.a, lat: d.lat, lng: d.lng } : null;
+    return { start: depot(data.start), end: depot(data.end), stops: data.stops, result: data.result || null };
+  } catch (_) {
+    return null;
+  }
+}
+
+// Signature of the current stops + depots — used to tell whether a stored optimize
+// result still matches the stops (so we never share/show a stale route).
+function routeSignature() {
+  const pt = d => d ? `${d.lat},${d.lng}` : "";
+  const stopSig = stops.filter(s => s.lat && s.lng).map(s => `${s.lat},${s.lng}`).join("|");
+  return `${pt(startDepot)}>${stopSig}>${pt(endDepot)}`;
+}
+
+// Apply a decoded shared session: overwrite depots (persisted) and the stop list.
+function applySharedSession(s) {
+  if (s.start) {
+    startDepot = s.start;
+    localStorage.setItem("startDepot", JSON.stringify(startDepot));
+  }
+  if (s.end) {
+    endDepot = s.end;
+    localStorage.setItem("endDepot", JSON.stringify(endDepot));
+  } else {
+    endDepot = null;
+    localStorage.removeItem("endDepot");
+  }
+  stops = s.stops.map(st => ({
+    id: Date.now() + Math.random(),
+    orderId: st.o || null,
+    originalAddress: st.a,
+    formattedAddress: st.a,
+    lat: st.lat,
+    lng: st.lng,
+    type: st.t || "unknown",
+    status: "ok",  // shared stops already carry confirmed coordinates
+  }));
+}
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
@@ -536,6 +609,17 @@ function renderResults({ ordered_stops, maps_links, whatsapp_text }) {
   const resultsEl = document.getElementById("results");
   resultsEl.style.display = "block";
 
+  // Remember this route so Share can include it — tagged with a signature of the
+  // current stops+depots so we never share a route that no longer matches the stops.
+  _lastResult = {
+    ordered_stops: ordered_stops.map(s => ({
+      formatted_address: s.formatted_address, lat: s.lat, lng: s.lng, type: s.type,
+    })),
+    maps_links,
+    whatsapp_text,
+  };
+  _lastResultSig = routeSignature();
+
   // Map
   renderMap(ordered_stops);
 
@@ -652,15 +736,35 @@ function depotIcon(label, color) {
 
 // ── Share ─────────────────────────────────────────────────────────────────────
 
-function shareText() {
-  const primaryLink = document.getElementById("maps-btn-primary").getAttribute("href");
-  if (!primaryLink || primaryLink === "#") { showToast("Optimize a route first"); return; }
-  const extraLinks = Array.from(document.querySelectorAll("#maps-extra-links a")).map(a => a.getAttribute("href"));
-  const allLinks = [primaryLink, ...extraLinks];
-  const body = allLinks.length === 1
-    ? `Today's optimized route:\n${allLinks[0]}`
-    : allLinks.map((l, i) => `Part ${i + 1}: ${l}`).join("\n");
-  window.location.href = `sms:?body=${encodeURIComponent(body)}`;
+// Share a link to the app that restores the whole current session (stops + depots,
+// plus the optimized route if it's still current), so the recipient can keep editing
+// and open the GPS themselves. Hands off to WhatsApp, which handles long links well.
+async function shareSession() {
+  const confirmed = stops.filter(s => s.lat && s.lng);
+  if (!confirmed.length) { showToast("Add some stops first"); return; }
+
+  const payload = {
+    v: 1,
+    start: startDepot ? { a: startDepot.formattedAddress, lat: startDepot.lat, lng: startDepot.lng } : null,
+    end:   endDepot   ? { a: endDepot.formattedAddress,   lat: endDepot.lat,   lng: endDepot.lng   } : null,
+    stops: confirmed.map(s => {
+      const o = { a: s.formattedAddress, lat: s.lat, lng: s.lng, t: s.type };
+      if (s.orderId) o.o = s.orderId;
+      return o;
+    }),
+  };
+  // Include the optimized route only if it still matches the current stops/depots.
+  if (_lastResult && _lastResultSig === routeSignature()) {
+    payload.result = _lastResult;
+  }
+
+  const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+  const url = `${location.origin}${location.pathname}#s=${encoded}`;
+  const message = `Open my delivery route in the app:\n${url}`;
+
+  // Copy as a backup, then open WhatsApp prefilled with the link.
+  try { await navigator.clipboard.writeText(url); } catch (_) {}
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
 }
 
 function copyWhatsapp() {
