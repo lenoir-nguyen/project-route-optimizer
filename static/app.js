@@ -383,16 +383,6 @@ function renderStops() {
       <div class="address-text">
         <div>${stop.formattedAddress}${orderTag}${isSameLoc ? ' <span class="same-loc-label">⚠ same location</span>' : ""}</div>
         ${stop.originalAddress !== stop.formattedAddress ? `<div class="original">Original: ${stop.originalAddress}</div>` : ""}
-        ${showFix ? `
-          <div class="fix-row">
-            <div class="autocomplete-wrapper" style="position:relative">
-              <input type="text" class="fix-input" value="${fixValue}" placeholder="${fixPlaceholder}"
-                onkeydown="if(event.key==='Enter'){applyFix(this,${stop.id})}"
-              />
-              <div class="autocomplete-dropdown fix-dd-${stop.id}" style="display:none"></div>
-            </div>
-            <button class="btn-secondary btn-sm" onclick="applyFix(this.previousElementSibling.querySelector('input'),${stop.id})">Save</button>
-          </div>` : ""}
       </div>
       <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
         ${typeLabel ? `<span class="address-type-badge">${typeLabel}</span>` : ""}
@@ -400,6 +390,16 @@ function renderStops() {
       </div>
       <button class="edit-btn" onclick="toggleEdit(${stop.id})" title="${editing ? "Cancel edit" : "Edit address"}">${editing ? "↩" : "✎"}</button>
       <button class="remove-btn" onclick="removeStop(${stop.id})" title="Remove">×</button>
+      ${showFix ? `
+        <div class="fix-row">
+          <div class="autocomplete-wrapper" style="position:relative">
+            <input type="text" class="fix-input" value="${fixValue}" placeholder="${fixPlaceholder}"
+              onkeydown="if(event.key==='Enter'){applyFix(this,${stop.id})}"
+            />
+            <div class="autocomplete-dropdown fix-dd-${stop.id}" style="display:none"></div>
+          </div>
+          <button class="btn-secondary btn-sm" onclick="applyFix(this.previousElementSibling.querySelector('input'),${stop.id})">Save</button>
+        </div>` : ""}
     </div>`;
   }).join("");
 

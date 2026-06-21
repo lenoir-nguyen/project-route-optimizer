@@ -110,7 +110,7 @@ a.btn-action { line-height: 1.2; }
 /* Address list */
 #address-list { display: flex; flex-direction: column; gap: 6px; }
 .address-item {
-  display: flex; align-items: flex-start; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px;
   padding: 8px 10px; border: 1px solid var(--gray-200);
   border-radius: var(--radius); background: #fff; font-size: .85rem;
 }
@@ -141,8 +141,11 @@ a.btn-action { line-height: 1.2; }
   background: var(--gray-100); border-radius: 4px; font-size: .7rem; color: var(--gray-600);
 }
 
-.fix-row { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
-.fix-row input { flex: 1; font-size: .8rem; padding: 6px 8px; }
+/* Edit/fix address row — drops to its own full-width line under the stop */
+.fix-row { display: flex; gap: 6px; margin-top: 4px; align-items: stretch; width: 100%; flex-basis: 100%; }
+.fix-row .autocomplete-wrapper { flex: 1; min-width: 0; }
+.fix-row input { width: 100%; font-size: 16px; padding: 10px 12px; }  /* 16px avoids iOS zoom-on-focus */
+.fix-row .btn-secondary { flex-shrink: 0; padding: 10px 14px; }
 
 /* Summary panel */
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }

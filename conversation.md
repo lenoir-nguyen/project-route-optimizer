@@ -92,3 +92,16 @@ total recomputes live. Updated `docs/VERSIONS.md`. Syntax verified (`node --chec
 verification deferred to the user (testing on Vercel).
 **Open / next steps:** Note — the optimized-results panel is still a snapshot from the last
 Optimize; editing/removing stops after optimizing doesn't refresh that panel until re-run.
+
+## 2026-06-21 — Make the edit address field full-width / mobile-friendly
+**Discussed:** The inline edit field (opened by the ✎ button) was too small; user is mostly on
+a phone and wants it full-size and responsive.
+**Findings:** Two causes — the input had `flex:1` but lived inside a non-flex
+`.autocomplete-wrapper`, so it rendered at the default tiny width; and the fix-row was nested
+inside the narrow `.address-text` column, competing with badges/buttons.
+**Changes made:** `static/app.js` — moved the fix-row out of `.address-text` to be a direct
+child of `.address-item` so it wraps to its own line. `static/style.css` — `flex-wrap` on
+`.address-item`; `.fix-row` full width (`flex-basis:100%`); input `width:100%` + `font-size:16px`
+(avoids iOS zoom-on-focus) + larger padding; Save button kept from shrinking. Layout-only;
+autocomplete wiring unaffected (`closest('.address-item')`). Syntax verified.
+**Open / next steps:** User to test on Vercel/phone.
