@@ -76,3 +76,19 @@ with a Node harness (10/10 cases incl. regressions). Updated `docs/ARCHITECTURE.
 **Open / next steps:** Known limitation — does NOT bridge Google returning a *different* city
 name than configured (e.g. "Toronto" for a North York address); would need an alias map.
 `data/zone_earnings.json` still has placeholder `null` amounts.
+
+## 2026-06-21 — Edit/remove any stop, with live total refresh
+**Discussed:** Be able to remove AND update an existing delivery stop, and have the estimated
+earning total update accordingly.
+**Findings:** Remove already existed and already refreshed the total; editing was only offered
+for *flagged* (uncertain/not-found) stops — confirmed stops couldn't be edited.
+**Decisions:** Add an inline Edit affordance to every stop, reusing the existing fix-row /
+`fixAddress` re-geocode path rather than a parallel edit flow (DRY).
+**Changes made:** `static/app.js` — `_editingIds` state, ✎ Edit / ↩ Cancel button per stop,
+`toggleEdit()`, edit-state cleanup in `applyFix`/`removeStop`/`clearAll`; `showFix` now opens
+for flagged OR editing stops (input pre-filled with current address). `static/style.css` —
+`.edit-btn`. Both edit and remove flow through `renderStops → updateSummary`, so the earning
+total recomputes live. Updated `docs/VERSIONS.md`. Syntax verified (`node --check`); browser
+verification deferred to the user (testing on Vercel).
+**Open / next steps:** Note — the optimized-results panel is still a snapshot from the last
+Optimize; editing/removing stops after optimizing doesn't refresh that panel until re-run.

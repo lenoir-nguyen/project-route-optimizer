@@ -14,6 +14,9 @@ Delivered so far:
   addresses from screenshots, dedupes by order ID).
 - **Geocoding & validation** — Google Geocoding for lat/lng + precision status; uncertain /
   not-found stops are flagged with an inline "fix" autocomplete.
+- **Edit / remove any stop** — every stop has ✎ Edit and × Remove. Editing re-geocodes the new
+  address through the same fix path; both actions recompute the summary totals live (stop count,
+  same-location, business, and estimated earning).
 - **Business vs residential** — Google Places **Nearby Search** (radius 10m) at the geocoded
   point; replaced the earlier `findplacefromtext` approach, which misclassified bare addresses.
 - **Route points** — configurable start and end depot (default round trip = end is start),

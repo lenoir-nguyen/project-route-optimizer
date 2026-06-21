@@ -9,6 +9,7 @@ let startDepot   = JSON.parse(localStorage.getItem("startDepot") || "null");
 let endDepot     = JSON.parse(localStorage.getItem("endDepot")   || "null");
 let zoneEarnings = {}; // loaded from server on startup
 let _routeMap    = null; // Leaflet map instance
+let _editingIds  = new Set(); // stop ids currently in inline-edit mode
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -259,12 +260,14 @@ async function addStop(rawAddress, needsReview = false, orderId = null) {
 }
 
 function removeStop(id) {
+  _editingIds.delete(id);
   stops = stops.filter(s => s.id !== id);
   renderStops();
 }
 
 function clearAll() {
   stops = [];
+  _editingIds.clear();
   document.getElementById("results").style.display = "none";
   if (_routeMap) { _routeMap.remove(); _routeMap = null; }
   renderStops();
@@ -368,6 +371,11 @@ function renderStops() {
     const orderTag  = stop.orderId ? `<span class="order-id-tag">#${stop.orderId}</span>` : "";
     const earning   = getEarning(stop.formattedAddress);
     const earningBadge = earning !== null ? `<span class="earning-badge">💰 $${earning}</span>` : "";
+    const editing   = _editingIds.has(stop.id);
+    const flagged   = stop.status === "uncertain" || stop.status === "not_found";
+    const showFix   = flagged || editing;  // flagged stops auto-show; others open via Edit
+    const fixValue  = editing ? stop.formattedAddress.replace(/"/g, "&quot;") : "";
+    const fixPlaceholder = flagged ? "Search correct address…" : "Search new address…";
 
     return `
     <div class="address-item${isSameLoc ? " same-loc" : ""}" data-id="${stop.id}">
@@ -375,21 +383,22 @@ function renderStops() {
       <div class="address-text">
         <div>${stop.formattedAddress}${orderTag}${isSameLoc ? ' <span class="same-loc-label">⚠ same location</span>' : ""}</div>
         ${stop.originalAddress !== stop.formattedAddress ? `<div class="original">Original: ${stop.originalAddress}</div>` : ""}
-        ${stop.status === "uncertain" || stop.status === "not_found" ? `
+        ${showFix ? `
           <div class="fix-row">
             <div class="autocomplete-wrapper" style="position:relative">
-              <input type="text" class="fix-input" placeholder="Search correct address…"
+              <input type="text" class="fix-input" value="${fixValue}" placeholder="${fixPlaceholder}"
                 onkeydown="if(event.key==='Enter'){applyFix(this,${stop.id})}"
               />
               <div class="autocomplete-dropdown fix-dd-${stop.id}" style="display:none"></div>
             </div>
-            <button class="btn-secondary btn-sm" onclick="applyFix(this.previousElementSibling.querySelector('input'),${stop.id})">Fix</button>
+            <button class="btn-secondary btn-sm" onclick="applyFix(this.previousElementSibling.querySelector('input'),${stop.id})">Save</button>
           </div>` : ""}
       </div>
       <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
         ${typeLabel ? `<span class="address-type-badge">${typeLabel}</span>` : ""}
         ${earningBadge}
       </div>
+      <button class="edit-btn" onclick="toggleEdit(${stop.id})" title="${editing ? "Cancel edit" : "Edit address"}">${editing ? "↩" : "✎"}</button>
       <button class="remove-btn" onclick="removeStop(${stop.id})" title="Remove">×</button>
     </div>`;
   }).join("");
@@ -414,7 +423,15 @@ function renderStops() {
 function applyFix(input, id) {
   const val = input.value.trim();
   if (!val) return;
+  _editingIds.delete(id);
   fixAddress(id, val);
+}
+
+// Toggle inline edit mode for an existing stop, then re-render to show/hide its search box.
+function toggleEdit(id) {
+  if (_editingIds.has(id)) _editingIds.delete(id);
+  else _editingIds.add(id);
+  renderStops();
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────
