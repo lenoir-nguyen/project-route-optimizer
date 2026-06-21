@@ -667,8 +667,14 @@ function extractCity(formattedAddress) {
   return m ? m[1].trim().toLowerCase() : null;
 }
 
+// Canonical key for a city name so matching ignores case, spacing, and punctuation:
+// "North York", "north york", and "NorthYork" all collapse to "northyork".
+function normalizeCity(name) {
+  return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function getEarning(formattedAddress) {
-  const city = extractCity(formattedAddress);
+  const city = normalizeCity(extractCity(formattedAddress));
   let earning = null;
 
   if (city === "toronto" && zoneEarnings.toronto) {
@@ -676,8 +682,13 @@ function getEarning(formattedAddress) {
     if (zoneKey && zoneKey in zoneEarnings.toronto) {
       earning = zoneEarnings.toronto[zoneKey];
     }
-  } else if (city && city in zoneEarnings) {
-    earning = zoneEarnings[city];
+  } else if (city) {
+    // Match a stored city key by its canonical form, so however the user typed it
+    // in settings (case/spacing) still lines up with Google's formatted address.
+    const key = Object.keys(zoneEarnings).find(
+      k => k !== "_default" && k !== "toronto" && normalizeCity(k) === city
+    );
+    if (key) earning = zoneEarnings[key];
   }
 
   // null means not configured for this zone → fall back to default
@@ -828,16 +839,18 @@ async function saveZoneSettings() {
     }
   });
 
-  // Read city name + earning directly from DOM rows (name is editable)
+  // Read city name + earning directly from DOM rows (name is editable).
+  // Dedup by canonical form so "North York" and "northyork" can't both be saved.
   const seen = new Set();
   document.querySelectorAll("#city-tbody tr").forEach(row => {
     const nameEl   = row.querySelector(".city-name-input");
     const amountEl = row.querySelector(".city-amount-input");
     if (!nameEl) return; // empty-state row
     const city = nameEl.value.trim().toLowerCase();
+    const norm = normalizeCity(city);
     const val  = parseFloat(amountEl?.value);
-    if (city && city !== "toronto" && city !== "_default" && !seen.has(city)) {
-      seen.add(city);
+    if (norm && norm !== "toronto" && city !== "_default" && !seen.has(norm)) {
+      seen.add(norm);
       payload[city] = isNaN(val) ? null : val;
     }
   });

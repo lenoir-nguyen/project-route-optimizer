@@ -61,3 +61,18 @@ constraints), reconstructed this log from git history, filled `docs/VERSIONS.md`
 `docs/ARCHITECTURE.md`, removed the scaffold-only `STRUCTURE.md`.
 **Open / next steps:** Decide today's actual feature/bug work. Note: `.claude/` is untracked;
 `data/zone_earnings.json` still has placeholder `null` amounts.
+
+## 2026-06-21 — Zone-earning matching made case/spacing-insensitive
+**Discussed:** Verify that a city/postal entered in Zone Earnings settings matches regardless
+of case or spacing ("North York" / "north york" / "NorthYork").
+**Findings:** Case was already handled (both sides lowercased); postal codes too. Gap: the
+no-space form ("NorthYork") stored as `northyork` ≠ Google's `north york`, so it silently fell
+back to the default earning.
+**Decisions:** Match on a canonical city key, not exact string equality.
+**Changes made:** `static/app.js` — added `normalizeCity()` (lowercase + strip
+non-alphanumerics); `getEarning()` now looks up the stored key by canonical form;
+`saveZoneSettings()` dedups by canonical form so two spellings can't both be saved. Verified
+with a Node harness (10/10 cases incl. regressions). Updated `docs/ARCHITECTURE.md`.
+**Open / next steps:** Known limitation — does NOT bridge Google returning a *different* city
+name than configured (e.g. "Toronto" for a North York address); would need an alias map.
+`data/zone_earnings.json` still has placeholder `null` amounts.

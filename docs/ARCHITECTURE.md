@@ -45,7 +45,9 @@ server-side persisted state is a single global zone-earnings config file.
 
 Earning amounts are **not** computed server-side: `app.js` reads the config from
 `/api/zone-earnings` and matches each stop by city (and Toronto postal-code prefix), falling
-back to `_default`.
+back to `_default`. City matching is canonicalized via `normalizeCity()` (lowercase, strip
+spaces/punctuation), so a configured `North York` / `north york` / `NorthYork` all match the
+same address.
 
 ## Key Decisions (and why)
 
