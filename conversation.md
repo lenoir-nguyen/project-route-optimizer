@@ -123,3 +123,25 @@ staleness tests (13/13 across two suites); browser/WhatsApp hand-off to be teste
 **Open / next steps:** Known tradeoff — very large routes make a long link (fine for WhatsApp;
 would need a server short-link only if a tiny URL is required). Results panel still doesn't
 auto-hide when stops change after optimizing (the share correctly omits the stale route, though).
+
+## 2026-06-21 — Fix business/residential classification (Address Validation + toggle)
+**Discussed:** Classification marked nearly every stop "business".
+**Findings (with real API tests):** Root cause = old logic asked Places "any establishment
+within 10m?" → home-based businesses are registered at residential addresses, so almost
+everything matched. Distance/threshold can't fix it (home businesses sit at 0m). Tested the
+Google **Address Validation API**: better, but Canadian coverage is partial — it returns
+`business=True` for some commercial addresses, **never** affirmatively `residential`, and "no
+signal" for most (incl. some real businesses like 290 Yonge / 1 Dundas). It also still false-
+flagged one home-business residential (25 Cougar Crt). ~5/8 correct on the sample — a useful
+hint, not authoritative.
+**Decisions:** Use Address Validation as a best-effort hint (trust `business=True`, default
+everything else to residential) **plus** a manual per-stop tap-toggle as the source of truth.
+User enabled the Address Validation API (had to add it to the key's API-restriction allowlist —
+`API_KEY_SERVICE_BLOCKED` until then).
+**Changes made:** `api/geocoder.py` — replaced Places Nearby hack with `_classify()` calling
+Address Validation; graceful fallback to residential on any error/no-signal. `static/app.js` —
+`toggleType()`; type badge is now a tap-to-flip control. `static/style.css` — `.type-toggle`.
+Docs synced (CLAUDE.md, ARCHITECTURE.md, VERSIONS.md, SETUP_GUIDE.md, .env.example).
+**Open / next steps:** Classification is "acceptable" per user. Possible future: alias map for
+Google returning a different city name in earnings matching; results-panel auto-refresh after
+edits; populate real `zone_earnings.json` amounts.

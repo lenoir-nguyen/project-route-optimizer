@@ -17,8 +17,11 @@ Delivered so far:
 - **Edit / remove any stop** — every stop has ✎ Edit and × Remove. Editing re-geocodes the new
   address through the same fix path; both actions recompute the summary totals live (stop count,
   same-location, business, and estimated earning).
-- **Business vs residential** — Google Places **Nearby Search** (radius 10m) at the geocoded
-  point; replaced the earlier `findplacefromtext` approach, which misclassified bare addresses.
+- **Business vs residential** — best-effort hint from the Google **Address Validation API**
+  (`metadata.business`), defaulting to residential when there's no signal; the driver can
+  **tap the 🏠/🏢 badge to flip** any stop. Replaced earlier Places approaches
+  (`findplacefromtext`, then Nearby Search), which marked nearly everything "business" because
+  home-based businesses are registered at residential addresses.
 - **Route points** — configurable start and end depot (default round trip = end is start),
   persisted in `localStorage`.
 - **Optimization** — ORS driving-duration matrix → OR-Tools TSP (10s timeout, ≤57 stops) →

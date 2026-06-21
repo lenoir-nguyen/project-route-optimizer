@@ -440,7 +440,8 @@ function renderStops() {
   container.innerHTML = stops.map(stop => {
     const isSameLoc = sameLocIds.has(stop.id);
     const statusIcon = { ok: "✓", uncertain: "?", not_found: "✗", pending: "…" }[stop.status] || "…";
-    const typeLabel = stop.type === "business" ? "🏢 Business" : stop.type === "residential" ? "🏠 Residential" : "";
+    const isBiz     = stop.type === "business";  // anything not "business" shows as residential
+    const typeBadge = `<span class="address-type-badge type-toggle" onclick="toggleType(${stop.id})" title="Tap to switch business / residential">${isBiz ? "🏢 Business" : "🏠 Residential"}</span>`;
     const orderTag  = stop.orderId ? `<span class="order-id-tag">#${stop.orderId}</span>` : "";
     const earning   = getEarning(stop.formattedAddress);
     const earningBadge = earning !== null ? `<span class="earning-badge">💰 $${earning}</span>` : "";
@@ -458,7 +459,7 @@ function renderStops() {
         ${stop.originalAddress !== stop.formattedAddress ? `<div class="original">Original: ${stop.originalAddress}</div>` : ""}
       </div>
       <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
-        ${typeLabel ? `<span class="address-type-badge">${typeLabel}</span>` : ""}
+        ${typeBadge}
         ${earningBadge}
       </div>
       <button class="edit-btn" onclick="toggleEdit(${stop.id})" title="${editing ? "Cancel edit" : "Edit address"}">${editing ? "↩" : "✎"}</button>
@@ -505,6 +506,14 @@ function toggleEdit(id) {
   if (_editingIds.has(id)) _editingIds.delete(id);
   else _editingIds.add(id);
   renderStops();
+}
+
+// Manually flip a stop between business and residential (the auto-guess is best-effort).
+function toggleType(id) {
+  const stop = stops.find(s => s.id === id);
+  if (!stop) return;
+  stop.type = stop.type === "business" ? "residential" : "business";
+  renderStops();  // recomputes the business count in the summary
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────

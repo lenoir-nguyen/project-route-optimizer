@@ -34,8 +34,8 @@ Browser (HTML/JS + Leaflet map)
     │
     ├── POST /api/extract-addresses  →  Claude Vision API   (image → addresses)
     ├── GET  /api/places-autocomplete→  Google Places API   (typeahead suggestions)
-    ├── POST /api/geocode            →  Google Geocoding +   (address → lat/lng + status)
-    │                                   Places Nearby Search (business vs residential)
+    ├── POST /api/geocode            →  Google Geocoding +       (address → lat/lng + status)
+    │                                   Google Address Validation (business/residential hint)
     ├── POST /api/optimize           →  ORS Matrix API → OR-Tools TSP → ordered list + Maps URLs
     └── GET/POST /api/zone-earnings  →  read/write data/zone_earnings.json (global config)
                                                           ↑
@@ -57,7 +57,8 @@ prefix), using the config served by `/api/zone-earnings`.
 | Backend | Python 3.11 + FastAPI | Serves static files + API |
 | Image OCR | Claude API (claude-haiku-4-5) | Vision: extract addresses from screenshots |
 | Geocoding | Google Geocoding API | Validate addresses, get lat/lng + precision status |
-| Address typing | Google Places API | Autocomplete + Nearby Search (business vs residential) |
+| Address typing | Google Places API | Autocomplete suggestions |
+| Classification | Google Address Validation API | business/residential hint (best-effort; user can tap-toggle per stop) |
 | Distance matrix | OpenRouteService API | Free tier; ≤3481 elements/request (59×59) |
 | Route solver | Google OR-Tools | TSP, 10s timeout, runs server-side |
 | Sharing | WhatsApp + clipboard | Share = `wa.me/?text=` link with the full session encoded in the URL `#fragment` (LZ-string) |

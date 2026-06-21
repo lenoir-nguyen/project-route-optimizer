@@ -21,7 +21,7 @@ server-side persisted state is a single global zone-earnings config file.
 | Matrix | Locations → driving-duration matrix (ORS) | `api/matrix.py` |
 | Solver | Duration matrix → optimized stop order (OR-Tools TSP) | `api/solver.py` |
 | Zone config | Persisted global earnings table | `data/zone_earnings.json` |
-| External | Claude API, Google Geocoding/Places, OpenRouteService, OSM tiles | third-party |
+| External | Claude API, Google Geocoding/Places/Address Validation, OpenRouteService, OSM tiles | third-party |
 
 ## Data / Request Flow
 
@@ -32,7 +32,7 @@ server-side persisted state is a single global zone-earnings config file.
    upload images  ──────► POST /api/extract-addresses ─► vision.py ─────► Claude Vision
    type address   ──────► GET  /api/places-autocomplete ───────────────► Google Places
    add a stop     ──────► POST /api/geocode ─► geocoder.py ────────────► Google Geocoding
-                          │                                  └─────────► Google Places Nearby
+                          │                                  └─────────► Google Address Validation
    click Optimize ──────► POST /api/optimize ─┬─ matrix.py ────────────► ORS Matrix API
                           │                    └─ solver.py (OR-Tools TSP, local)
                           │                       └─► ordered stops + chunked Maps URLs
@@ -40,7 +40,7 @@ server-side persisted state is a single global zone-earnings config file.
                           └──────────────────────────────────────────────┘
 
    Render: Leaflet map (OSM tiles) + ordered list + per-stop earning badges (matched in app.js)
-   Share:  Google Maps link(s), SMS deep link, copy route text
+   Share:  WhatsApp link with the whole session encoded in the URL #fragment; copy route text
 ```
 
 **Session sharing** is stateless too: the Share button serializes the whole working session
@@ -65,9 +65,14 @@ same address.
   human-readable addresses more reliably than raw coordinates.
 - **Maps URLs chunked at ≤23 waypoints** — Google Maps `dir/` URLs cap at 23 waypoints +
   origin + destination; long routes split into "Part N" links.
-- **Places Nearby Search for classification** — reflects what is physically at the coordinate;
-  `findplacefromtext` is a text search and returned the closest *named* place, misclassifying
-  bare street addresses in both directions.
+- **Business/residential = Address Validation API + manual toggle** — earlier approaches via
+  Places (`findplacefromtext`, then Nearby Search) were unreliable: home-based businesses are
+  registered at residential addresses in Google Places, so "any establishment nearby → business"
+  marked almost everything business. Address Validation's `metadata.business` flag is the
+  purpose-built signal, but its Canadian coverage is partial (often "no signal", and it never
+  affirmatively returns residential). So it's treated as a best-effort hint — trust
+  `business=True`, default everything else to residential — and the UI lets the driver flip any
+  stop's type with a tap (`toggleType`). The tap-toggle is the source of truth; the API is a head start.
 - **Zone earnings persisted server-side, matched client-side** — one shared JSON config (the
   user is the only operator), but matching logic stays in the browser so the summary updates
   live without round-trips.
